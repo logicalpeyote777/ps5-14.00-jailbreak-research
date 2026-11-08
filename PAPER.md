@@ -1538,6 +1538,133 @@ so for 14.00 there is no expected value to compare against.
 (§9.3). The two are stated separately rather than merged into one claim.
 
 
+### 12.7 A different class of read: type conversion rather than a memory window
+
+The three closed probes in §12.5 all shared one assumption: that a read requires a **window**
+onto memory, and that a typed interface denies that window. The assumption held, three times.
+It is also the assumption that hid the alternative.
+
+**A read can come out of a type conversion instead of a memory window.** From `core.js`:
+
+```js
+const symbolToString = Symbol.prototype.toString;              // :81
+capturedString = symbolToString.call(preparedSymbolObject);    // :691
+copiedLength   = capturedString.length;                        // :692
+capturedWords[i] = capturedString.charCodeAt(7 + i);           // :694  i = 0..15
+```
+
+**The offset 7 is not magic: it is exactly `len("Symbol(")`.** A real Symbol returns
+`"Symbol(<desc>)"`, so offset 7 skips the prefix and reads the description. Applied to a
+non-Symbol, the engine reads the description field out of the wrong object's memory, and what
+lives there is the internal slots, which is to say the pointers. **The interface's type is not
+what governs here; it is the behaviour of a conversion function applied to a type other than
+its own.**
+
+**Baseline on V8, measured rather than assumed.** Reproduced directly on Node 24:
+
+```
+T0  Symbol("ABCD")            -> "Symbol(ABCD)"   codes@7 = 65,66,67,68  = "ABCD"
+T1b Object(Symbol("WXYZ"))    -> codes@7 = 87,88,89,90 = "WXYZ"
+T1  call({})                  -> THROWS: Symbol.prototype.toString requires that 'this' be a Symbol
+T1  call(function(){})        -> THROWS (same)
+T1  call(123)                 -> THROWS (same)
+T1  call("s")                 -> THROWS (same)
+```
+
+**The wrapper and the primitive carry the slot at the same offset** (T1b), which is what makes
+the read position predictable. On a hardened engine the confusion throws, and that throw is the
+reference that defines what "closed" looks like before any device run.
+
+**The scope leak is plain JavaScript.** No UAF, no memory bug:
+
+```js
+class Leaker { leak() { return super.foo; } }
+Leaker.prototype.__proto__ = new Proxy({}, {
+    get: function (target, property, receiver) { return receiver; }
+});
+const leak = Leaker.prototype.leak;
+```
+
+`super.foo` performs a `[[Get]]` on the home object's prototype; the Proxy trap returns
+`receiver`, which in a `super` lookup is the caller's `this`. **`leak.call(target)` makes
+`target` come back through the trap as the receiver: the leaked value is chosen by whoever
+calls, not inherited from the context.** Measured on V8:
+
+```
+leak.call(ctx)      === ctx        TRUE
+leak.call({})       === same obj   TRUE
+leak.call(f64Array) === same       TRUE
+trap properties seen: ["foo"]
+bare leak()         -> undefined
+```
+
+**Two independent axes with independent outcomes.** The targeted leak works on V8; the type
+confusion throws on V8. Neither result implies the other, which is what makes the pair a usable
+reference for reading an engine: it separates "the leak mechanism is intact" from "the
+confusion is permitted".
+
+**Device state on 14.00: the hardened check is present, and it fires.** The probe log carries
+**257 device records** of the address-leak step failing on exactly this gate:
+
+```
+257 x  Address leak failed: TypeError:
+       Symbol.prototype.toString requires that |this| be a symbol
+       or a symbol object
+```
+
+**[device]** All 257 under `name: "Retry"`, identical message, all with UA
+`PlayStation 5/14.00`. Across the whole log: 330 `TypeError` lines and 588 `Scope not leaked`
+lines. These are PS5 measurements, not V8.
+
+**The gate accepts the primitive and the wrapper, and rejects everything else.** Its message
+names both admitted forms explicitly. That wording is JSC's own and differs from V8's, which
+says only `requires that 'this' be a Symbol`; the difference in string is what identifies
+which engine produced the record. **The gate's shape is the same on both engines: a non-symbol
+is refused. The naive confusion-by-call on 14.00 is blocked, with 257 evidences.**
+
+**The question that replaces it is sharper.** `prepareSymbolWrapper` returns
+`Object(leakedScope.g)`, where the getter `g` is `getterCarrier`, which returns `7`.
+`Object(7)` is a Number object: `[object Number]`, neither a symbol nor a symbol object, and
+it throws against the gate when tested directly. **Yet Prolapse jails from this on 14.10.** So
+the confusion is not in the `.call()` at all: **it is in the carrier structure causing the
+engine to treat the result as a Symbol before the gate sees it.** What makes
+`Object(leakedScope.g)` a symbol object for the purposes of this check is where the actual
+primitive lives, and that is not yet resolved.
+
+| Item | Status |
+|---|---|
+| Hardened check present on 14.00 | **[device]**, 257 records |
+| Naive confusion-by-call on 14.00 | **blocked [device]** |
+| How Prolapse passes the check | **open: inside the carrier, not the call** |
+| Our own `symbol-confusion-1400` asse module | **not run: zero records in the log** |
+
+**The leak mechanism itself remains intact on JSC 14.00**: the get trap fires and a
+receiver-carrying call leaks the receiver, identical to the Chromium baseline **[device]**.
+What changed from 13.60 is the bare-call form, which reports `Scope not leaked` across 588
+log lines: JSC now passes `receiver` undefined on a bare super-property lookup.
+
+**What is established, and what is not.** Established: the class of primitive exists, its
+hardened baseline is measured on V8, the gate is present and firing on 14.00 with 257 device
+records, and the scope leak is caller-controllable. Not established: that the chain works on
+14.00, and not established how Prolapse gets past a gate that this device enforces.
+
+**The progression, not the list.**
+
+| Class | Status | Mechanism |
+|---|---|---|
+| Typed read window | **closed, measured three times** (§12.5) | the interface's type masks the memory |
+| Naive type conversion by call | **blocked on 14.00 [device]** | the gate refuses a non-symbol |
+| Conversion via a crafted carrier | **open** | something makes the result read as a symbol before the gate sees it |
+| Scope leak | **plain JS, caller-controllable [device]** | `super` plus a Proxy trap returning the receiver |
+
+**A blocked form is not a closed class.** The gate closes the naive call and, in doing so,
+localises the primitive precisely: whatever Prolapse relies on is in the carrier, upstream of
+the check that this device passes nothing through.
+
+**Closing a class empirically is what makes the next class visible.** The three negatives were
+not a dead end; they were the boundary that put this one in view.
+
+
 ---
 
 

@@ -136,6 +136,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#124-the-chain-as-implemented-and-the-one-primitive-that-is-missing">12.4 The chain as implemented, and the one primitive that is missing</a></li>
 <li><a href="#125-typed-interfaces-return-their-own-type-not-the-memory-beneath">12.5 Typed interfaces return their own type, not the memory beneath</a></li>
 <li><a href="#126-the-rop-prerequisite-list-collapses-from-four-to-two">12.6 The ROP prerequisite list collapses from four to two</a></li>
+<li><a href="#127-a-different-class-of-read-type-conversion-rather-than-a-memory-window">12.7 A different class of read: type conversion rather than a memory window</a></li>
 </ul>
 </li>
 </ul>
@@ -1751,6 +1752,147 @@ so for 14.00 there is no expected value to compare against.</p>
 <p><strong>Induction declared where it applies.</strong> <code>5c c3</code> absent in 12.xx is <strong>measured</strong>. Absent in
 14.00 is <strong>induced by family</strong>, since no 14.00 <code>libkernel_web</code> binary is in our possession
 (§9.3). The two are stated separately rather than merged into one claim.</p>
+<h3 id="127-a-different-class-of-read-type-conversion-rather-than-a-memory-window">12.7 A different class of read: type conversion rather than a memory window</h3>
+<p>The three closed probes in §12.5 all shared one assumption: that a read requires a <strong>window</strong>
+onto memory, and that a typed interface denies that window. The assumption held, three times.
+It is also the assumption that hid the alternative.</p>
+<p><strong>A read can come out of a type conversion instead of a memory window.</strong> From <code>core.js</code>:</p>
+<pre><code class="language-js">const symbolToString = Symbol.prototype.toString;              // :81
+capturedString = symbolToString.call(preparedSymbolObject);    // :691
+copiedLength   = capturedString.length;                        // :692
+capturedWords[i] = capturedString.charCodeAt(7 + i);           // :694  i = 0..15
+</code></pre>
+<p><strong>The offset 7 is not magic: it is exactly <code>len("Symbol(")</code>.</strong> A real Symbol returns
+<code>"Symbol(&lt;desc&gt;)"</code>, so offset 7 skips the prefix and reads the description. Applied to a
+non-Symbol, the engine reads the description field out of the wrong object's memory, and what
+lives there is the internal slots, which is to say the pointers. <strong>The interface's type is not
+what governs here; it is the behaviour of a conversion function applied to a type other than
+its own.</strong></p>
+<p><strong>Baseline on V8, measured rather than assumed.</strong> Reproduced directly on Node 24:</p>
+<pre><code>T0  Symbol(&quot;ABCD&quot;)            -&gt; &quot;Symbol(ABCD)&quot;   codes@7 = 65,66,67,68  = &quot;ABCD&quot;
+T1b Object(Symbol(&quot;WXYZ&quot;))    -&gt; codes@7 = 87,88,89,90 = &quot;WXYZ&quot;
+T1  call({})                  -&gt; THROWS: Symbol.prototype.toString requires that 'this' be a Symbol
+T1  call(function(){})        -&gt; THROWS (same)
+T1  call(123)                 -&gt; THROWS (same)
+T1  call(&quot;s&quot;)                 -&gt; THROWS (same)
+</code></pre>
+<p><strong>The wrapper and the primitive carry the slot at the same offset</strong> (T1b), which is what makes
+the read position predictable. On a hardened engine the confusion throws, and that throw is the
+reference that defines what "closed" looks like before any device run.</p>
+<p><strong>The scope leak is plain JavaScript.</strong> No UAF, no memory bug:</p>
+<pre><code class="language-js">class Leaker { leak() { return super.foo; } }
+Leaker.prototype.__proto__ = new Proxy({}, {
+    get: function (target, property, receiver) { return receiver; }
+});
+const leak = Leaker.prototype.leak;
+</code></pre>
+<p><code>super.foo</code> performs a <code>[[Get]]</code> on the home object's prototype; the Proxy trap returns
+<code>receiver</code>, which in a <code>super</code> lookup is the caller's <code>this</code>. <strong><code>leak.call(target)</code> makes
+<code>target</code> come back through the trap as the receiver: the leaked value is chosen by whoever
+calls, not inherited from the context.</strong> Measured on V8:</p>
+<pre><code>leak.call(ctx)      === ctx        TRUE
+leak.call({})       === same obj   TRUE
+leak.call(f64Array) === same       TRUE
+trap properties seen: [&quot;foo&quot;]
+bare leak()         -&gt; undefined
+</code></pre>
+<p><strong>Two independent axes with independent outcomes.</strong> The targeted leak works on V8; the type
+confusion throws on V8. Neither result implies the other, which is what makes the pair a usable
+reference for reading an engine: it separates "the leak mechanism is intact" from "the
+confusion is permitted".</p>
+<p><strong>Device state on 14.00: the hardened check is present, and it fires.</strong> The probe log carries
+<strong>257 device records</strong> of the address-leak step failing on exactly this gate:</p>
+<pre><code>257 x  Address leak failed: TypeError:
+       Symbol.prototype.toString requires that |this| be a symbol
+       or a symbol object
+</code></pre>
+<p><strong>[device]</strong> All 257 under <code>name: "Retry"</code>, identical message, all with UA
+<code>PlayStation 5/14.00</code>. Across the whole log: 330 <code>TypeError</code> lines and 588 <code>Scope not leaked</code>
+lines. These are PS5 measurements, not V8.</p>
+<p><strong>The gate accepts the primitive and the wrapper, and rejects everything else.</strong> Its message
+names both admitted forms explicitly. That wording is JSC's own and differs from V8's, which
+says only <code>requires that 'this' be a Symbol</code>; the difference in string is what identifies
+which engine produced the record. <strong>The gate's shape is the same on both engines: a non-symbol
+is refused. The naive confusion-by-call on 14.00 is blocked, with 257 evidences.</strong></p>
+<p><strong>The question that replaces it is sharper.</strong> <code>prepareSymbolWrapper</code> returns
+<code>Object(leakedScope.g)</code>, where the getter <code>g</code> is <code>getterCarrier</code>, which returns <code>7</code>.
+<code>Object(7)</code> is a Number object: <code>[object Number]</code>, neither a symbol nor a symbol object, and
+it throws against the gate when tested directly. <strong>Yet Prolapse jails from this on 14.10.</strong> So
+the confusion is not in the <code>.call()</code> at all: <strong>it is in the carrier structure causing the
+engine to treat the result as a Symbol before the gate sees it.</strong> What makes
+<code>Object(leakedScope.g)</code> a symbol object for the purposes of this check is where the actual
+primitive lives, and that is not yet resolved.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hardened check present on 14.00</td>
+<td><strong>[device]</strong>, 257 records</td>
+</tr>
+<tr>
+<td>Naive confusion-by-call on 14.00</td>
+<td><strong>blocked [device]</strong></td>
+</tr>
+<tr>
+<td>How Prolapse passes the check</td>
+<td><strong>open: inside the carrier, not the call</strong></td>
+</tr>
+<tr>
+<td>Our own <code>symbol-confusion-1400</code> asse module</td>
+<td><strong>not run: zero records in the log</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The leak mechanism itself remains intact on JSC 14.00</strong>: the get trap fires and a
+receiver-carrying call leaks the receiver, identical to the Chromium baseline <strong>[device]</strong>.
+What changed from 13.60 is the bare-call form, which reports <code>Scope not leaked</code> across 588
+log lines: JSC now passes <code>receiver</code> undefined on a bare super-property lookup.</p>
+<p><strong>What is established, and what is not.</strong> Established: the class of primitive exists, its
+hardened baseline is measured on V8, the gate is present and firing on 14.00 with 257 device
+records, and the scope leak is caller-controllable. Not established: that the chain works on
+14.00, and not established how Prolapse gets past a gate that this device enforces.</p>
+<p><strong>The progression, not the list.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Status</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Typed read window</td>
+<td><strong>closed, measured three times</strong> (§12.5)</td>
+<td>the interface's type masks the memory</td>
+</tr>
+<tr>
+<td>Naive type conversion by call</td>
+<td><strong>blocked on 14.00 [device]</strong></td>
+<td>the gate refuses a non-symbol</td>
+</tr>
+<tr>
+<td>Conversion via a crafted carrier</td>
+<td><strong>open</strong></td>
+<td>something makes the result read as a symbol before the gate sees it</td>
+</tr>
+<tr>
+<td>Scope leak</td>
+<td><strong>plain JS, caller-controllable [device]</strong></td>
+<td><code>super</code> plus a Proxy trap returning the receiver</td>
+</tr>
+</tbody>
+</table>
+<p><strong>A blocked form is not a closed class.</strong> The gate closes the naive call and, in doing so,
+localises the primitive precisely: whatever Prolapse relies on is in the carrier, upstream of
+the check that this device passes nothing through.</p>
+<p><strong>Closing a class empirically is what makes the next class visible.</strong> The three negatives were
+not a dead end; they were the boundary that put this one in view.</p>
 <hr />
 <h1 id="part-iii-method-related-work-conclusion">Part III : Method, related work, conclusion</h1>
 <h2 id="13-methodology-new">13. Methodology <code>[new]</code></h2>
