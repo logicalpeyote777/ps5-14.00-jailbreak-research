@@ -1752,6 +1752,21 @@ patch state. Two-direction verification fixed it: patched Chromium with the real
 same type) → `ok:true`/`same:false`/proceeds to B ✓. **A gate must be run against a
 known-negative before it is trusted on an unknown.**
 
+**The same failure exists one level up, in the labels rather than the probes.** `aio_multi_wait`
+carried a `[device]` tag in this note for days. The probe log contains **zero** records for it:
+no `aio_multi_wait`, no `aio_` prefix, no `AIO`, no `ENOSYS`, no `ENOTSUP`. The tag had been
+applied to a claim that no device run had ever produced.
+
+> **An evidence tag is earned by the probe, not by the sentence. If the probe file does not
+> exist, the tag does not get applied.**
+
+**A tag without a probe behind it is the more dangerous of the two failure modes, because it has
+the appearance of evidence without its content.** An untagged claim reads as a hypothesis and
+invites checking. A claim carrying `[device]` impersonates a measurement and suppresses the
+question that the tag was supposed to answer. **The tag exists to make a claim auditable; a tag
+with nothing to audit against is worse than no tag, because it closes the question it should
+have opened.**
+
 ### 13.5 Dead paths: measured negatives
 
 Five readings do not work on this kernel. Each is recorded with its measurement so the next

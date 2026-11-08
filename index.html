@@ -2017,6 +2017,20 @@ patch state. Two-direction verification fixed it: patched Chromium with the real
 <code>ok:false</code>/<code>same:true</code>/stops at A ✓; a synthetic vulnerable factory (fresh object per call,
 same type) → <code>ok:true</code>/<code>same:false</code>/proceeds to B ✓. <strong>A gate must be run against a
 known-negative before it is trusted on an unknown.</strong></p>
+<p><strong>The same failure exists one level up, in the labels rather than the probes.</strong> <code>aio_multi_wait</code>
+carried a <code>[device]</code> tag in this note for days. The probe log contains <strong>zero</strong> records for it:
+no <code>aio_multi_wait</code>, no <code>aio_</code> prefix, no <code>AIO</code>, no <code>ENOSYS</code>, no <code>ENOTSUP</code>. The tag had been
+applied to a claim that no device run had ever produced.</p>
+<blockquote>
+<p><strong>An evidence tag is earned by the probe, not by the sentence. If the probe file does not
+exist, the tag does not get applied.</strong></p>
+</blockquote>
+<p><strong>A tag without a probe behind it is the more dangerous of the two failure modes, because it has
+the appearance of evidence without its content.</strong> An untagged claim reads as a hypothesis and
+invites checking. A claim carrying <code>[device]</code> impersonates a measurement and suppresses the
+question that the tag was supposed to answer. <strong>The tag exists to make a claim auditable; a tag
+with nothing to audit against is worse than no tag, because it closes the question it should
+have opened.</strong></p>
 <h3 id="135-dead-paths-measured-negatives">13.5 Dead paths: measured negatives</h3>
 <p>Five readings do not work on this kernel. Each is recorded with its measurement so the next
 reader does not spend a day on it.</p>
