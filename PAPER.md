@@ -1132,8 +1132,10 @@ Solving the first does not advance the second: a code leak makes the kernel *rea
 *writable*. **Even with the leak solved, `sysctl` does not give kernel read/write**: the kind
 swap of §4 is a permission bypass that closes a denying branch, not a memory-safety violation,
 and moves no attacker bytes on its own. The other candidate on that path, `aio_multi_wait`, is
-patched on 14.00 **[device]** (bypass characterisation **[static]**, 13.60). Reporting the swap
-as "the kernel write" would be reporting a permission change as a primitive.
+reported patched in earlier notes, **but no probe of it has run on the device: zero `aio` records
+in the probe log**, and with no decrypted 14.00 kernel the claim is not statically checkable
+either. **Its status on 14.00 is open rather than measured** (§14.6). Reporting the swap as "the
+kernel write" would be reporting a permission change as a primitive.
 
 **6.1.1 No kernel write is reachable from the browser.** The canvas UAF writes the WebProcess
 heap; the kind swap lives in kernel memory. Nothing here bridges them: the PoC driver reports
@@ -2143,11 +2145,51 @@ copying; both are documentation of a front they share.** What is hardware-verifi
 the `addrof`/fake-object/read-write primitive and the ROP executor that consumes it, not a
 completed jailbreak.
 
-**The kernel candidate exists elsewhere and not here.** `aio_multi_wait` (syscall 663) answers
-`EINVAL` rather than `ENOSYS` on 13.60, which is what makes the bug reachable in principle,
-and its ABI is measured on hardware. **On 14.00 there is no named kernel candidate in this
-note.** Whether syscall 663 exists there, and with which errno, is unmeasured; a single probe
-answering that would put the two projects on the same question at the same firmware.
+**The kernel candidate exists elsewhere and not here, and its number is in conflict.**
+Prolapse reports `aio_multi_wait` as syscall 663, answering `EINVAL` rather than `ENOSYS` on
+13.60, which is what makes the bug reachable in principle, with the ABI
+`(ids, num, states, mode, timeout)` measured on hardware. **Our own measured table puts it at
+660:**
+
+```
+syscall            index        source
+aio_submit         658          name table T1 @ file 0x254bb28
+aio_multi_wait     660          name table T2 @ file 0x2beed38, stride 8
+                               both tables agree
+```
+
+**[static]** Derived from `kernel-13.60-live.bin` (103 546 880 B, sha256 `c3f745e2…`) by
+name-table read. **663 does not appear in our table.** There is a recorded matching error in
+exactly this zone: *"the first search used an exact-name match and missed the `compat.`
+prefix."* **With two numbers in play and a known matching failure between them, a probe aimed at
+the wrong one tests a different syscall and returns an errno that means nothing.** The rule that
+follows is not to pick one silently: probe a range (656–666) and read the errno at each, so the
+answer carries both "does it exist" and "which number is it".
+
+**On 14.00 there is no named kernel candidate in this note, and the question is not probeable
+right now.** Two routes were examined and both are blocked. A live probe needs a syscall channel
+from the WebProcess, which means code execution, which is what the kernel half is being hunted
+for; every piece of syscall knowledge in this note is static-from-dump, read out of a file rather
+than returned by a call. A static probe needs a decrypted 14.00 kernel image, which does not
+exist (§12.1): the 14.00 PUP is encrypted, and the only 14.00 kernel-shaped artifact on hand is
+a 256-byte stub whose `strings` output contains no syscall names at all.
+
+**"Open" and "probeable now" are different things.** The branch is formally open, not closed:
+the exclusion of the AIO family in our own scope notes was a mandate, not a measurement, and no
+errno for `aio_multi_wait` appears anywhere in our logs. **The question is answerable only once
+a syscall channel exists on 14.00, which is the same code-execution prerequisite the whole
+kernel half depends on.**
+
+**One bottleneck with many faces.** A decrypted 14.00 kernel would answer the syscall-number
+conflict, populate the syscall table, and settle every kernel-side branch on 14.00 statically,
+without a device. **The L1 decryption blocks the syscall table, blocks the number conflict, and
+blocks the probe that would otherwise be the cheapest thing left.** This is not a list of
+problems; it is one problem seen from several directions.
+
+**A reading hazard for any future probe.** From inside the Capsicum sandbox, `ENOTSUP` and
+`EACCES` are artifacts of the sandbox rather than facts about the kernel. **They belong in a
+separate class and must not be read as `ENOSYS`, or a sandbox refusal gets recorded as an absent
+syscall.**
 
 **What this makes stronger rather than weaker.** The userland primitive this note is trying to
 ablate is demonstrated working on an analogous engine: JSC 13.60, hardware-verified, inside a
