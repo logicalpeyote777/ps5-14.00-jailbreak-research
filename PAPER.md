@@ -306,9 +306,73 @@ exploitability from a throw."*
 | | Status |
 |---|---|
 | Confusion reachable | **confirmed** **[device]** |
-| Confused object produced and retained | **not done** |
-| Pointer scan on that object | **not done** (depends on the above) |
-| Deref → arbitrary read | **not tested** |
+| Confused object produced and retained | **DONE — 3/3 retained and readable** **[device]** |
+| Pointer scan on retained objects | **DONE — 6 objects scanned, 0 pointer-shaped** **[device]** |
+| Engine-side object captured and scanned | **DONE — stream/writable/readable/writer, all `ownProps=0`, 0 pointer-shaped** **[device]** |
+| Deref → arbitrary read | **not reachable — see below** |
+
+Two follow-up probes were run against this finding. Neither observed the guard and the access in
+the right order, but the second answers the question indirectly and more strongly than the error
+message did.
+
+**Probe 1 — `retain-confused-object-1400`:**
+
+```
+BASE     f64->u8 visible=true bytes0=0,0,0,0,0,0,248,63
+CONF     threw=TypeError msg=Type error
+RETAIN   yielded=3 iters=2 stream=no thrown=yes
+SCAN     objects-scanned=6 ptrlike=0   FREQ {}   CANDS []
+ALIVE    retained-and-readable=3/3
+VERDICT  OBJECT-RETAINED ptrlike=0
+```
+
+**Probe 2 — `engine-object-1400`**, built deliberately to capture the *engine's* object rather
+than our own inputs:
+
+```
+BASE     f64->u8=true b0..7=0,0,0,0,0,0,248,63
+BUILD    stream created with default (valid) ctor
+OBJ      stream=object ownProps=0
+SCAN     stream.writable ownProps=0
+SCAN     stream.readable ownProps=0
+READ     ReadableStream with confused iterator built ok
+WRITER   writer acquired
+SUMMARY  captured=4 ptrlike=0
+VERDICT  NO-ENGINE-POINTER (baseline alive, so this is a real negative)
+```
+
+**Both probes carried a live baseline of the read channel** — the `BASE` line in each shows the
+f64→u8 channel visible before any confusion was introduced. **That is what makes the zeros real
+negatives rather than vacuous ones.** A scan that finds nothing on a channel that cannot read is
+worthless; a scan that finds nothing on a channel demonstrated working one line earlier is a
+measurement.
+
+**The result that matters is not the pointer zero — it is `ownProps=0`.** `stream`,
+`stream.writable`, `stream.readable` and the writer all return **zero observable properties**
+under `getOwnPropertyNames`. This corroborates the §5 census independently
+(`textarea ownProps=0 div ownProps=0 canvas ownProps=0`); it now holds for engine objects, not
+just DOM nodes. **The pointers live in the C++ object and JavaScript does not expose them.** The
+only properties observed anywhere in either probe were our own `{v: i}` inputs.
+
+**On the guard-versus-access ordering:** in probe 2 the confusion **did not throw** —
+`ReadableStream with confused iterator built ok`, `writer acquired`, with zero pointers lost and
+zero crashes. That is **consistent with the guard preceding the access, but it does not
+demonstrate the order.** Nothing here proves the guard runs first; it shows that when the
+confused path is taken, nothing unsafe becomes observable through JavaScript.
+
+**The conclusion, stated without overselling it: the iterator confusion is not proven harmless.**
+What is proven is that it is **unreadable through JavaScript property enumeration.** Those are
+different claims and only the second one is supported.
+
+**And the circle is worth naming explicitly, because it is the whole finding.** Reading the
+confused object would require the bidirectional primitive. The bidirectional primitive requires
+the address of the confused object. That address is exactly the leak we do not have. **The bug
+cannot be exploited with the capability that the bug would provide** — it is closed by the same
+missing piece that closes every other route in §12.3, arriving from a direction we did not
+expect.
+
+**No CVE is claimed for this bug, by decision.** The impact is not demonstrated and is not being
+presented as though it were.
 
 **Treating a reachability signal as a primitive is exactly the error class §13.8 is about**, and
 it is the reason this chapter exists separately rather than being folded into the primitives of
@@ -786,7 +850,9 @@ no 13.60 [sprx] locally, which is precisely why the runtime calibrate tile exist
 verified the same on our own host: `find /opt/AGENTS/Ares -iname "*.sprx"` returns nothing, and
 `ps5-sys.pup` yields no readable `.sprx` string through its encrypted L1.
 
-### 9.1 What the constraint does and does not close. The plan carried through most of this
+### 9.1 What the constraint does and does not close
+
+The plan carried through most of this
 research — *"scan WebKit text for `5f c3` / `5e c3` / `5a c3` / `59 c3` and rebuild the gadget
 map"* — is closed, but the accurate statement of why matters. For `libkernel` the closure is
 hard: reading the text faults. For WebKit the stronger and better-supported statement is not
@@ -799,7 +865,9 @@ There is a cross-check already in the record: the community `wk_gadgetmap` conta
 absence is equally consistent with the map having been built by a method that never read the text
 either, which is what §9.2 shows.
 
-### 9.2 The reframe — read the address, not the code. This is the more useful product of the
+### 9.2 The reframe — read the address, not the code
+
+This is the more useful product of the
 finding.
 
 | How the problem was posed for weeks | How it has to be posed |
@@ -820,7 +888,9 @@ window. The pre-9.00 legacy path reads the **vtable**, which lives in `.data.rel
 execute-only text. That legacy branch fired **0 times across 81 recorded runs**. The whole method
 is *"read the address of the code from the data"*, never *"read the code"*.
 
-### 9.3 The deltas are family-specific, not module-invariant. Recalculated from the `EXPECT`
+### 9.3 The deltas are family-specific, not module-invariant
+
+Recalculated from the `EXPECT`
 table in `tools/lkfind.js` rather than copied, the stability is narrower than the headline
 deltas suggest:
 

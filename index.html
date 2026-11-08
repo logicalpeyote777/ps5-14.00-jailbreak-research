@@ -122,9 +122,9 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </li>
 <li><a href="#part-ii-tested-and-proven-dead">Part II — Tested and proven dead</a><ul>
 <li><a href="#9-execute-only-text-the-constraint-that-reframes-the-leak-new">9. Execute-only text: the constraint that reframes the leak [new]</a><ul>
-<li><a href="#91-what-the-constraint-does-and-does-not-close-the-plan-carried-through-most-of-this">9.1 What the constraint does and does not close. The plan carried through most of this</a></li>
-<li><a href="#92-the-reframe-read-the-address-not-the-code-this-is-the-more-useful-product-of-the">9.2 The reframe — read the address, not the code. This is the more useful product of the</a></li>
-<li><a href="#93-the-deltas-are-family-specific-not-module-invariant-recalculated-from-the-expect">9.3 The deltas are family-specific, not module-invariant. Recalculated from the EXPECT</a></li>
+<li><a href="#91-what-the-constraint-does-and-does-not-close">9.1 What the constraint does and does not close</a></li>
+<li><a href="#92-the-reframe-read-the-address-not-the-code">9.2 The reframe — read the address, not the code</a></li>
+<li><a href="#93-the-deltas-are-family-specific-not-module-invariant">9.3 The deltas are family-specific, not module-invariant</a></li>
 </ul>
 </li>
 <li><a href="#10-denormal-zeroing-why-the-primitive-cannot-read-pointers-back-new">10. Denormal-zeroing: why the primitive cannot read pointers back [new]</a></li>
@@ -426,18 +426,72 @@ exploitability from a throw."</em></p>
 </tr>
 <tr>
 <td>Confused object produced and retained</td>
-<td><strong>not done</strong></td>
+<td><strong>DONE — 3/3 retained and readable</strong> <strong>[device]</strong></td>
 </tr>
 <tr>
-<td>Pointer scan on that object</td>
-<td><strong>not done</strong> (depends on the above)</td>
+<td>Pointer scan on retained objects</td>
+<td><strong>DONE — 6 objects scanned, 0 pointer-shaped</strong> <strong>[device]</strong></td>
+</tr>
+<tr>
+<td>Engine-side object captured and scanned</td>
+<td><strong>DONE — stream/writable/readable/writer, all <code>ownProps=0</code>, 0 pointer-shaped</strong> <strong>[device]</strong></td>
 </tr>
 <tr>
 <td>Deref → arbitrary read</td>
-<td><strong>not tested</strong></td>
+<td><strong>not reachable — see below</strong></td>
 </tr>
 </tbody>
 </table>
+<p>Two follow-up probes were run against this finding. Neither observed the guard and the access in
+the right order, but the second answers the question indirectly and more strongly than the error
+message did.</p>
+<p><strong>Probe 1 — <code>retain-confused-object-1400</code>:</strong></p>
+<pre><code>BASE     f64-&gt;u8 visible=true bytes0=0,0,0,0,0,0,248,63
+CONF     threw=TypeError msg=Type error
+RETAIN   yielded=3 iters=2 stream=no thrown=yes
+SCAN     objects-scanned=6 ptrlike=0   FREQ {}   CANDS []
+ALIVE    retained-and-readable=3/3
+VERDICT  OBJECT-RETAINED ptrlike=0
+</code></pre>
+<p><strong>Probe 2 — <code>engine-object-1400</code></strong>, built deliberately to capture the <em>engine's</em> object rather
+than our own inputs:</p>
+<pre><code>BASE     f64-&gt;u8=true b0..7=0,0,0,0,0,0,248,63
+BUILD    stream created with default (valid) ctor
+OBJ      stream=object ownProps=0
+SCAN     stream.writable ownProps=0
+SCAN     stream.readable ownProps=0
+READ     ReadableStream with confused iterator built ok
+WRITER   writer acquired
+SUMMARY  captured=4 ptrlike=0
+VERDICT  NO-ENGINE-POINTER (baseline alive, so this is a real negative)
+</code></pre>
+<p><strong>Both probes carried a live baseline of the read channel</strong> — the <code>BASE</code> line in each shows the
+f64→u8 channel visible before any confusion was introduced. <strong>That is what makes the zeros real
+negatives rather than vacuous ones.</strong> A scan that finds nothing on a channel that cannot read is
+worthless; a scan that finds nothing on a channel demonstrated working one line earlier is a
+measurement.</p>
+<p><strong>The result that matters is not the pointer zero — it is <code>ownProps=0</code>.</strong> <code>stream</code>,
+<code>stream.writable</code>, <code>stream.readable</code> and the writer all return <strong>zero observable properties</strong>
+under <code>getOwnPropertyNames</code>. This corroborates the §5 census independently
+(<code>textarea ownProps=0 div ownProps=0 canvas ownProps=0</code>); it now holds for engine objects, not
+just DOM nodes. <strong>The pointers live in the C++ object and JavaScript does not expose them.</strong> The
+only properties observed anywhere in either probe were our own <code>{v: i}</code> inputs.</p>
+<p><strong>On the guard-versus-access ordering:</strong> in probe 2 the confusion <strong>did not throw</strong> —
+<code>ReadableStream with confused iterator built ok</code>, <code>writer acquired</code>, with zero pointers lost and
+zero crashes. That is <strong>consistent with the guard preceding the access, but it does not
+demonstrate the order.</strong> Nothing here proves the guard runs first; it shows that when the
+confused path is taken, nothing unsafe becomes observable through JavaScript.</p>
+<p><strong>The conclusion, stated without overselling it: the iterator confusion is not proven harmless.</strong>
+What is proven is that it is <strong>unreadable through JavaScript property enumeration.</strong> Those are
+different claims and only the second one is supported.</p>
+<p><strong>And the circle is worth naming explicitly, because it is the whole finding.</strong> Reading the
+confused object would require the bidirectional primitive. The bidirectional primitive requires
+the address of the confused object. That address is exactly the leak we do not have. <strong>The bug
+cannot be exploited with the capability that the bug would provide</strong> — it is closed by the same
+missing piece that closes every other route in §12.3, arriving from a direction we did not
+expect.</p>
+<p><strong>No CVE is claimed for this bug, by decision.</strong> The impact is not demonstrated and is not being
+presented as though it were.</p>
 <p><strong>Treating a reachability signal as a primitive is exactly the error class §13.8 is about</strong>, and
 it is the reason this chapter exists separately rather than being folded into the primitives of
 §3. The confusion is real and it is ours to try; it is not, today, a read or a write.</p>
@@ -952,8 +1006,9 @@ by us</strong> — and §9.2 will argue that it does not need to be known.</p>
 no 13.60 [sprx] locally, which is precisely why the runtime calibrate tile exists."</em> We
 verified the same on our own host: <code>find /opt/AGENTS/Ares -iname "*.sprx"</code> returns nothing, and
 <code>ps5-sys.pup</code> yields no readable <code>.sprx</code> string through its encrypted L1.</p>
-<h3 id="91-what-the-constraint-does-and-does-not-close-the-plan-carried-through-most-of-this">9.1 What the constraint does and does not close. The plan carried through most of this</h3>
-<p>research — <em>"scan WebKit text for <code>5f c3</code> / <code>5e c3</code> / <code>5a c3</code> / <code>59 c3</code> and rebuild the gadget
+<h3 id="91-what-the-constraint-does-and-does-not-close">9.1 What the constraint does and does not close</h3>
+<p>The plan carried through most of this
+research — <em>"scan WebKit text for <code>5f c3</code> / <code>5e c3</code> / <code>5a c3</code> / <code>59 c3</code> and rebuild the gadget
 map"</em> — is closed, but the accurate statement of why matters. For <code>libkernel</code> the closure is
 hard: reading the text faults. For WebKit the stronger and better-supported statement is not
 that the scan <strong>cannot</strong> be run but that <strong>it is not the route taken by the people who have this
@@ -963,8 +1018,9 @@ assuming WebKit is <code>xotext</code>, and it is the one worth carrying.</p>
 <code>0f 05</code></strong>. That is consistent with the text being unreadable, but it is not proof of it — the
 absence is equally consistent with the map having been built by a method that never read the text
 either, which is what §9.2 shows.</p>
-<h3 id="92-the-reframe-read-the-address-not-the-code-this-is-the-more-useful-product-of-the">9.2 The reframe — read the address, not the code. This is the more useful product of the</h3>
-<p>finding.</p>
+<h3 id="92-the-reframe-read-the-address-not-the-code">9.2 The reframe — read the address, not the code</h3>
+<p>This is the more useful product of the
+finding.</p>
 <table>
 <thead>
 <tr>
@@ -989,8 +1045,9 @@ range and page-alignment validation — <code>ctor - hc</code> checked into the 
 window. The pre-9.00 legacy path reads the <strong>vtable</strong>, which lives in <code>.data.rel.ro</code>: data, not
 execute-only text. That legacy branch fired <strong>0 times across 81 recorded runs</strong>. The whole method
 is <em>"read the address of the code from the data"</em>, never <em>"read the code"</em>.</p>
-<h3 id="93-the-deltas-are-family-specific-not-module-invariant-recalculated-from-the-expect">9.3 The deltas are family-specific, not module-invariant. Recalculated from the <code>EXPECT</code></h3>
-<p>table in <code>tools/lkfind.js</code> rather than copied, the stability is narrower than the headline
+<h3 id="93-the-deltas-are-family-specific-not-module-invariant">9.3 The deltas are family-specific, not module-invariant</h3>
+<p>Recalculated from the <code>EXPECT</code>
+table in <code>tools/lkfind.js</code> rather than copied, the stability is narrower than the headline
 deltas suggest:</p>
 <pre><code>FW       sw       sj       lj       tl        pop_rsp
 10.00    0x14DC   0x3A68   0x3AC1   0x4B13D  0x1B2CF  (present)
