@@ -877,8 +877,8 @@ code through a read/write primitive does not return garbage and does not return 
 > *"Signature-scanning libkernel **text** is impossible (the libraries are **xotext**; reading
 > code through the R/W primitive **faults and kills the process**)."*
 
-**[upstream]** `1nk1/PS5-Prolapse`, `docs/PROJECT_HANDOFF.md` §9.2, from a working jailbreak,
-hardware-verified on 13.60. **The scope of this claim is libkernel, and nothing more.** Both
+**[upstream]** `1nk1/PS5-Prolapse`, `docs/PROJECT_HANDOFF.md` §9.2, from a working userland
+ROP executor, hardware-verified on 13.60. **The scope of this claim is libkernel, and nothing more.** Both
 occurrences of `xotext` in the handoff (lines 381 and 853) name libkernel; neither mentions
 WebKit. Whether WebKit's text is also execute-only is **not asserted by the source and not tested
 by us**: and §9.2 will argue that it does not need to be known.
@@ -1341,7 +1341,8 @@ its absence: it narrows where the next attempt should go.
 ### 12.4 The chain as implemented, and the one primitive that is missing
 
 The working chain was read out of the code that runs it rather than inferred, from
-`1nk1/PS5-Prolapse` (`core.js`), which jails from this same CVE class. Four steps:
+`1nk1/PS5-Prolapse` (`core.js`), whose userland half operates from this same CVE class.
+Four steps:
 
 **Step A: `addrof` via structured clone, not via canvas** (`core.js:663`). A 72 MB carrier
 array (`CARRIER_SLOTS = 9000000`) is seeded with alternating holders, and the round-trip is
@@ -1625,8 +1626,9 @@ is refused. The naive confusion-by-call on 14.00 is blocked, with 257 evidences.
 **The question that replaces it is sharper.** `prepareSymbolWrapper` returns
 `Object(leakedScope.g)`, where the getter `g` is `getterCarrier`, which returns `7`.
 `Object(7)` is a Number object: `[object Number]`, neither a symbol nor a symbol object, and
-it throws against the gate when tested directly. **Yet Prolapse jails from this on 14.10.** So
-the confusion is not in the `.call()` at all: **it is in the carrier structure causing the
+it throws against the gate when tested directly. **The primitive that gets through it is
+hardware-verified on JSC 13.60 inside a working ROP executor, while the kernel write is not
+achieved there either.** So the confusion is not in the `.call()` at all: **it is in the carrier structure causing the
 engine to treat the result as a Symbol before the gate sees it.** What makes
 `Object(leakedScope.g)` a symbol object for the purposes of this check is where the actual
 primitive lives, and that is not yet resolved.
@@ -2108,6 +2110,51 @@ difference in position is a matter of artifact rather than insight: a live 14.00
 hand, which the surveyed corpus does not have. The blocker is shared; the target is not yet
 worked by anyone.
 
+### 14.6 Two projects, one unsolved half
+
+Prolapse's own handoff states its position in five lines, quoted directly
+(their `docs/PROJECT_HANDOFF.md`, opening section, 52 827 bytes, 934 lines):
+
+```
+1. The WebKit/userland half works on 13.60 and its ROP syscall executor is
+   fully calibrated and hardware-verified (S10). This is genuinely new; no
+   public repo has a working 13.60 executor for this engine.
+2. The Bagagwa syscalls exist on 13.60. aio_multi_wait (syscall 663) answers
+   EINVAL, not ENOSYS. The bug is therefore reachable in principle.
+3. The ABI is measured on 13.60 hardware (S11.7):
+   (ids, num, states, mode, timeout).
+4. The arming step HAS now run once on 13.60: aio_submit_cmd produced two
+   LIVE pending requests (the request layout and encoding work!), but the
+   armed multi_wait(num=2) hit EFAULT because states was NULL - it never
+   reached the linking code. The states fix is committed; the next ARM run
+   is the first one that genuinely tests the bug.
+
+   "Nothing in this repo writes kernel memory on 13.60."
+```
+
+**Their entry table covers Poopsploit 9.00–12.00, P2JB 12.00–12.70, and a syscall test at
+13.00–13.60 described as *"nothing kernel-side, measures reachability only"*. There is no
+14.x row anywhere in it.**
+
+**Two independent projects have solved the userland half and neither has solved the kernel
+half.** That is the shape of this field, and it makes the relationship between this note and
+Prolapse parallel rather than derivative. **Neither project is a finished thing the other is
+copying; both are documentation of a front they share.** What is hardware-verified over there is
+the `addrof`/fake-object/read-write primitive and the ROP executor that consumes it, not a
+completed jailbreak.
+
+**The kernel candidate exists elsewhere and not here.** `aio_multi_wait` (syscall 663) answers
+`EINVAL` rather than `ENOSYS` on 13.60, which is what makes the bug reachable in principle,
+and its ABI is measured on hardware. **On 14.00 there is no named kernel candidate in this
+note.** Whether syscall 663 exists there, and with which errno, is unmeasured; a single probe
+answering that would put the two projects on the same question at the same firmware.
+
+**What this makes stronger rather than weaker.** The userland primitive this note is trying to
+ablate is demonstrated working on an analogous engine: JSC 13.60, hardware-verified, inside a
+calibrated executor. **A primitive verified on 13.60 and a gate measured firing on 14.00 are
+two ends of a question with a real answer at the far end**, not a guess that something might
+work.
+
 ---
 
 
@@ -2172,7 +2219,8 @@ patch that changed everything both exit zero.
 
 **Community sources**
 
-- `1nk1/PS5-Prolapse`: working jailbreak, hardware-verified on 13.60.
+- `1nk1/PS5-Prolapse`: working userland ROP executor, hardware-verified on 13.60; no kernel
+  memory write achieved.
   <https://github.com/1nk1/PS5-Prolapse>
   - `docs/PROJECT_HANDOFF.md` §9.2: the `xotext` constraint and the parked-stack delta method.
   - `tools/lkfind.js`: signature scanner, method-validated 6/6 against a synthetic image.
