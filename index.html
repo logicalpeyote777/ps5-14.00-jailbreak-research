@@ -2887,30 +2887,44 @@ Prolapse parallel rather than derivative. <strong>Neither project is a finished 
 copying; both are documentation of a front they share.</strong> What is hardware-verified over there is
 the <code>addrof</code>/fake-object/read-write primitive and the ROP executor that consumes it, not a
 completed jailbreak.</p>
-<p><strong>The author's own verdict, which settles what our inference could only suggest.</strong> A notebookcheck
-report of 2026-11-04 carries the position of Prolapse's author, Jose Coixao
-(<code>@notnotzecoxao</code>), after his own testing
-(<a href="https://www.notebookcheck.net/Promising-PS5-console-jailbreak-won-t-work-on-recent-firmware-as-Sony-combats-exploits.1442248.0.html">notebookcheck.net</a>,
-HTTP 200, read in full):</p>
-<pre><code>&quot;After further testing, Coixao determined it doesn't cause memory corruption
- on the console.&quot;
+<p><strong>The author's own words, from the primary source.</strong> Prolapse's author, Jose Coixao
+(<code>@notnotzecoxao</code>), posted the verdict directly on 2026-11-04. Retrieved through the X oEmbed
+endpoint, HTTP 200, which returns the post text as published
+(<a href="https://x.com/notnotzecoxao/status/2117778815531233511">x.com/notnotzecoxao/status/2117778815531233511</a>):</p>
+<pre><code>@Sonic_Iso warned both me and @StretchEcho that it was not possible to
+corrupt this memory, and i think he's right. perhaps another bug for AIO
+will come (collapse, anyone?), but for now i think we are currently out of
+luck for ps5 on 14.00 and 14.10
 
-&quot;The developer doubts the potential PS5 jailbreak can defeat the security
- protocols of firmware 14.00 and 14.10.&quot;
+                                    — Jose Coixao (@notnotzecoxao), November 4, 2026
 </code></pre>
-<p><strong>[upstream]</strong> The claim is the author's, reported by a named outlet on a dated page. <strong>The
-kernel half is unfinished in a specific way: on the two firmwares it was aimed at, the author
-reports that it does not produce the memory corruption the exploit needs.</strong> That is the same
-conclusion this note reaches statically from a repo whose own line reads <em>"Nothing in this repo
-writes kernel memory on 13.60"</em>, arrived at from the other end: <strong>from the inside, by the person
-who wrote it.</strong></p>
-<p><strong>A naming discrepancy, recorded rather than resolved.</strong> The report describes Prolapse as <em>"a
-memory management exploit targeting the <code>aio_multi_delete</code> function"</em>. <strong>Our measured table holds
-<code>aio_multi_wait</code> at 660 and <code>aio_submit</code> at 658; <code>aio_multi_delete</code> is not in our table at all.</strong>
-These are different members of the same <code>aio</code> family. <strong>Nothing here decides which name is the one
-that matters.</strong> The authority for the numbers in this note remains the direct name-table read of
+<p><strong>[upstream]</strong> This is the author's own voice rather than a report of it. <strong>The kernel half is
+unfinished in a specific way: the memory the exploit needs to corrupt is, in the author's words,
+not corruptible, and the conclusion he draws is that they are "out of luck" on 14.00 and 14.10.</strong>
+That is the same conclusion this note reaches statically from a repo whose own line reads <em>"Nothing
+in this repo writes kernel memory on 13.60"</em>, arrived at from the other end: <strong>from the inside,
+by the person who wrote it.</strong></p>
+<p><strong>The judgment is not his alone.</strong> He names <code>@Sonic_Iso</code> as the one who warned him and
+<code>@StretchEcho</code>, and aligns with it: <em>"i think he's right"</em>. <strong>Two developers besides the author
+hold that this memory cannot be corrupted on these firmwares, and the author agrees rather than
+disputes it.</strong> A negative carried by three people who each looked is harder to dismiss than one
+carried by the person with the most invested in the opposite.</p>
+<p><strong>A correction to how the secondary reporting named this.</strong> The notebookcheck report of the same
+date describes Prolapse as <em>"a memory management exploit targeting the <code>aio_multi_delete</code>
+function"</em> (<a href="https://www.notebookcheck.net/Promising-PS5-console-jailbreak-won-t-work-on-recent-firmware-as-Sony-combats-exploits.1442248.0.html">notebookcheck.net</a>,
+HTTP 200). <strong>The primary post names no function at all. It says "this memory" and "AIO", in
+general terms. <code>aio_multi_delete</code> is the outlet's specification, not the author's.</strong> <strong>The
+discrepancy between that name and the <code>aio_multi_wait</code> at 660 measured in this note is therefore
+an artifact of the secondary source's naming rather than a claim by Coixao about which syscall he
+targeted.</strong> The authority for the numbers here remains the direct name-table read of
 <code>kernel-13.60-live.bin</code> described above, and the probe rule stated there is a range rather than a
-single number precisely because the naming is unsettled.</p>
+single number precisely because the naming across sources is unsettled.</p>
+<p><strong>An open direction named by the author.</strong> The post does not stop at the negative: <em>"perhaps
+another bug for AIO will come (collapse, anyone?)"</em>. <strong>Coixao points at a future AIO bug, referred
+to as "collapse", as the thing that might replace this one.</strong> <strong>That is a lead and not a result:
+no mechanism, no firmware range and no status is attached to the name in the primary source.</strong> It
+is recorded here as a direction the author of the failed candidate says he is watching, which is
+where a lead belongs.</p>
 <p><strong>Three further facts from the same report, all consistent with the picture above.</strong></p>
 <p><strong>13.60 is the only jailbroken firmware, and the reason is named:</strong> homebrew experimentation is
 <em>"limited to July software 13.60"</em>, with Relapse and Byepervisor-Reborn removing the need to hunt
@@ -2925,9 +2939,9 @@ describe the menu, not the kernel.</p>
 targeted was patched in 14.20, and 14.22 shipped on 2 November with additional security fixes.
 <strong>No kernel jailbreak exists on 14.20 or 14.22 either.</strong></p>
 <p><strong>What nobody claims is kernel read/write on 14.00.</strong> Not the author of the most prominent
-candidate, not the report covering him, not the projects adjacent to it. <strong>The absence of that
-claim is the finding here, and it now has a dated external source rather than only the silence of
-a survey.</strong></p>
+candidate, who says so in his own post; not the report covering him; not the projects adjacent to
+it. <strong>The absence of that claim is the finding here, and it now rests on a dated primary
+statement rather than on the silence of a survey or the summary of a secondary outlet.</strong></p>
 <p><strong>The kernel candidate exists elsewhere and not here, and its number is in conflict.</strong>
 Prolapse reports <code>aio_multi_wait</code> as syscall 663, answering <code>EINVAL</code> rather than <code>ENOSYS</code> on
 13.60, which is what makes the bug reachable in principle, with the ABI
