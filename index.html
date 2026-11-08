@@ -2000,6 +2000,48 @@ Symbol, and the code says 7.</strong></p>
 <p><strong>The prediction gains a structural reason.</strong> It is not that the carrier fails to work; it is
 that the carrier cannot pretend. <strong>If a value passes a gate that refuses every forgery, it passes
 because the gate was not there.</strong></p>
+<p><strong>The read window is bounded by the string's length field, not open.</strong> <code>symbolToString</code> produces
+<code>"Symbol(" + desc + ")"</code>, so the string length obeys a law that was checked at nine description
+lengths on the local JSC:</p>
+<pre><code>desc_len    str_len    law 7+desc_len+1    readable at offset 7
+1           9          9                   2
+2           10         10                  3
+4           12         12                  5
+8           16         16                  9
+12          20         20                  13
+16          24         24                  16
+20          28         28                  16
+24          32         32                  16
+32          40         40                  16
+</code></pre>
+<p><strong>[static]</strong> The law holds exactly on all nine cases. Reading past the end of the string yields
+<code>NaN</code> from <code>charCodeAt</code>, <strong>not adjacent memory</strong>. What is readable at offset 7 is
+<code>desc_len + 1</code> bytes (the description characters plus the closing parenthesis), capped by
+however many bytes were requested.</p>
+<p><strong>The threshold for a 16-byte read was pinned by bisection:</strong></p>
+<pre><code>desc_len 14  str_len 22  readable 15   not enough
+desc_len 15  str_len 23  readable 16   minimum that works
+desc_len 16  str_len 24  readable 16
+</code></pre>
+<p><strong>Sixteen bytes at offset 7 require <code>desc_len &gt;= 15</code>, that is <code>str_len &gt;= 23</code>.</strong></p>
+<p><strong>The mental model this corrects.</strong> The reasoning up to here treated <code>symbolToString</code> as opening
+an open window onto memory. It does not: <strong>the read is bounded by the string's length field, and
+past the end there is <code>NaN</code> rather than whatever lies adjacent.</strong> The window is not a hole in
+memory; it is a window whose width is determined by a length. <strong>Widening it means controlling
+the length field, not finding a different bug.</strong></p>
+<p><strong>Two separate levers.</strong> The gate decides whether the call is permitted. The length field decides
+how wide the resulting read is. <strong>Whoever controls the length field controls the window, and
+that is a control point distinct from the gate.</strong> A value can clear the gate and still be too
+narrow to read anything useful through, which is exactly the case below.</p>
+<p><strong>Our variant is not Prolapse's primitive, and the difference matters.</strong> A getter returning a
+real Symbol clears the gate and yields a bounded window needing <code>str_len &gt;= 23</code>. Prolapse's
+getter returns <code>7</code>, which does not clear the gate on 14.00 at all. <strong>These are different
+primitives with different constraints and should not be conflated: ours passes the gate and is
+length-limited; theirs does not pass the gate on this firmware.</strong></p>
+<p><strong>What the leak carries.</strong> <code>leak.call(sym) === sym</code> holds on real JSC: the scope leak transports
+a Symbol unchanged, arriving as <code>[object Symbol]</code> and passing the gate at full length. <strong>The
+chain <code>leak → Symbol → gate</code> is closed on a real engine.</strong> That is a constructive result rather
+than a negative one: it says what can be built, not only what fails.</p>
 <p><strong>The contradiction this leaves, and its weight.</strong> The assignment chain in <code>core.js</code> is linear:</p>
 <pre><code class="language-js">getterCarrier = function getterCarrierFunction() { return 7; };   // :666
 preparedSymbolObject = prepareSymbolWrapper(getterCarrier);       // :679

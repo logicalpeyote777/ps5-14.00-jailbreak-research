@@ -1734,6 +1734,60 @@ Symbol, and the code says 7.**
 that the carrier cannot pretend. **If a value passes a gate that refuses every forgery, it passes
 because the gate was not there.**
 
+**The read window is bounded by the string's length field, not open.** `symbolToString` produces
+`"Symbol(" + desc + ")"`, so the string length obeys a law that was checked at nine description
+lengths on the local JSC:
+
+```
+desc_len    str_len    law 7+desc_len+1    readable at offset 7
+1           9          9                   2
+2           10         10                  3
+4           12         12                  5
+8           16         16                  9
+12          20         20                  13
+16          24         24                  16
+20          28         28                  16
+24          32         32                  16
+32          40         40                  16
+```
+
+**[static]** The law holds exactly on all nine cases. Reading past the end of the string yields
+`NaN` from `charCodeAt`, **not adjacent memory**. What is readable at offset 7 is
+`desc_len + 1` bytes (the description characters plus the closing parenthesis), capped by
+however many bytes were requested.
+
+**The threshold for a 16-byte read was pinned by bisection:**
+
+```
+desc_len 14  str_len 22  readable 15   not enough
+desc_len 15  str_len 23  readable 16   minimum that works
+desc_len 16  str_len 24  readable 16
+```
+
+**Sixteen bytes at offset 7 require `desc_len >= 15`, that is `str_len >= 23`.**
+
+**The mental model this corrects.** The reasoning up to here treated `symbolToString` as opening
+an open window onto memory. It does not: **the read is bounded by the string's length field, and
+past the end there is `NaN` rather than whatever lies adjacent.** The window is not a hole in
+memory; it is a window whose width is determined by a length. **Widening it means controlling
+the length field, not finding a different bug.**
+
+**Two separate levers.** The gate decides whether the call is permitted. The length field decides
+how wide the resulting read is. **Whoever controls the length field controls the window, and
+that is a control point distinct from the gate.** A value can clear the gate and still be too
+narrow to read anything useful through, which is exactly the case below.
+
+**Our variant is not Prolapse's primitive, and the difference matters.** A getter returning a
+real Symbol clears the gate and yields a bounded window needing `str_len >= 23`. Prolapse's
+getter returns `7`, which does not clear the gate on 14.00 at all. **These are different
+primitives with different constraints and should not be conflated: ours passes the gate and is
+length-limited; theirs does not pass the gate on this firmware.**
+
+**What the leak carries.** `leak.call(sym) === sym` holds on real JSC: the scope leak transports
+a Symbol unchanged, arriving as `[object Symbol]` and passing the gate at full length. **The
+chain `leak → Symbol → gate` is closed on a real engine.** That is a constructive result rather
+than a negative one: it says what can be built, not only what fails.
+
 **The contradiction this leaves, and its weight.** The assignment chain in `core.js` is linear:
 
 ```js
