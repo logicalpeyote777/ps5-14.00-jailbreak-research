@@ -2088,6 +2088,63 @@ excluded by measurement rather than by hypothesis: H1 and H4 show the carrier ca
 description through <code>this</code>. <strong>The question that remains is: what makes the description field of an
 object point at memory we did not write?</strong> On 14.00 with the gate present, the answer is not in
 the carrier. <strong>The question stays open, and it is now the right question.</strong></p>
+<p><strong>The typed-array boundary.</strong> The getter's source for the description need not be a literal. It
+can read a typed array, and the array's bytes become the description byte for byte:</p>
+<pre><code>getter -&gt; Uint8Array [65..80]   via arr[k]        str_len=24  codes@7=[65..80, 41]
+getter -&gt; DataView  [97..112]   via getUint8(k)  str_len=24  codes@7=[97..112, 41]
+getter -&gt; DataView  [97..112]   via dv[k]        str_len=24  codes@7=[0,0,0,...,41]
+</code></pre>
+<p><strong>[static]</strong> The access path matters and the third line is the reason. <code>DataView</code> has no numeric
+index access: <code>dv[0] === undefined</code>, so <code>String.fromCharCode(undefined)</code> contributes a zero and
+the description comes back blank while still passing the gate at full length. <strong>A blank read that
+passes the gate looks like an empty buffer and is really a wrong accessor.</strong> With <code>getUint8</code> the
+same buffer yields its contents exactly.</p>
+<p><strong>The backing store is always ours.</strong> <code>u.buffer instanceof ArrayBuffer</code> and
+<code>dv.buffer instanceof ArrayBuffer</code> both hold on the local engine. <strong>The getter can read a typed
+array, and the window shows the array's contents, but the array's backing store is an ArrayBuffer
+we allocated.</strong> Without a memory primitive there is no way to point it at memory that is not
+ours.</p>
+<p><strong>The JS-level frame, complete.</strong> Five components, each measured:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Behaviour</th>
+<th>Controlled by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gate</td>
+<td>internal type check, only real Symbols pass</td>
+<td>handing over a real Symbol</td>
+</tr>
+<tr>
+<td>Length field</td>
+<td>window width, <code>7 + desc_len + 1</code></td>
+<td>description length</td>
+</tr>
+<tr>
+<td>Description</td>
+<td>window content, byte for byte</td>
+<td>the Symbol's description</td>
+</tr>
+<tr>
+<td>Typed-array source</td>
+<td>array bytes become the description</td>
+<td>the getter's read path</td>
+</tr>
+<tr>
+<td>Backing store</td>
+<td>always our <code>ArrayBuffer</code></td>
+<td>nothing available at JS level</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The remaining gap is the memory primitive: pointing the backing store at memory that is not
+ours.</strong> That is exactly what the device has to supply, and on 14.00 it is what the gate blocks.
+<strong>The machine is understood end to end at the JavaScript level; the last component is not a JS
+question.</strong></p>
 <p><strong>Our variant is not Prolapse's primitive, and the difference matters.</strong> A getter returning a
 real Symbol clears the gate and yields a bounded window needing <code>str_len &gt;= 23</code>. Prolapse's
 getter returns <code>7</code>, which does not clear the gate on 14.00 at all. <strong>These are different

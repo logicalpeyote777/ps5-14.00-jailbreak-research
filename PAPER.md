@@ -1853,6 +1853,42 @@ description through `this`. **The question that remains is: what makes the descr
 object point at memory we did not write?** On 14.00 with the gate present, the answer is not in
 the carrier. **The question stays open, and it is now the right question.**
 
+**The typed-array boundary.** The getter's source for the description need not be a literal. It
+can read a typed array, and the array's bytes become the description byte for byte:
+
+```
+getter -> Uint8Array [65..80]   via arr[k]        str_len=24  codes@7=[65..80, 41]
+getter -> DataView  [97..112]   via getUint8(k)  str_len=24  codes@7=[97..112, 41]
+getter -> DataView  [97..112]   via dv[k]        str_len=24  codes@7=[0,0,0,...,41]
+```
+
+**[static]** The access path matters and the third line is the reason. `DataView` has no numeric
+index access: `dv[0] === undefined`, so `String.fromCharCode(undefined)` contributes a zero and
+the description comes back blank while still passing the gate at full length. **A blank read that
+passes the gate looks like an empty buffer and is really a wrong accessor.** With `getUint8` the
+same buffer yields its contents exactly.
+
+**The backing store is always ours.** `u.buffer instanceof ArrayBuffer` and
+`dv.buffer instanceof ArrayBuffer` both hold on the local engine. **The getter can read a typed
+array, and the window shows the array's contents, but the array's backing store is an ArrayBuffer
+we allocated.** Without a memory primitive there is no way to point it at memory that is not
+ours.
+
+**The JS-level frame, complete.** Five components, each measured:
+
+| Component | Behaviour | Controlled by |
+|---|---|---|
+| Gate | internal type check, only real Symbols pass | handing over a real Symbol |
+| Length field | window width, `7 + desc_len + 1` | description length |
+| Description | window content, byte for byte | the Symbol's description |
+| Typed-array source | array bytes become the description | the getter's read path |
+| Backing store | always our `ArrayBuffer` | nothing available at JS level |
+
+**The remaining gap is the memory primitive: pointing the backing store at memory that is not
+ours.** That is exactly what the device has to supply, and on 14.00 it is what the gate blocks.
+**The machine is understood end to end at the JavaScript level; the last component is not a JS
+question.**
+
 **Our variant is not Prolapse's primitive, and the difference matters.** A getter returning a
 real Symbol clears the gate and yields a bounded window needing `str_len >= 23`. Prolapse's
 getter returns `7`, which does not clear the gate on 14.00 at all. **These are different
