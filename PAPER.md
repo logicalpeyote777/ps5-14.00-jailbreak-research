@@ -1103,6 +1103,70 @@ names the same device, a dump of the `pup_update0` ioctl handler, and the same p
 *"If you have a jailbroken PS5 on FW 13.60 or below."* **Two independent directions, same
 conclusion, same named blocker.**
 
+**That project's README read in full, and what it adds beyond the table.** The full text of
+`deepkicks/TitaniaPy`
+([raw.githubusercontent.com/deepkicks/TitaniaPy/main/README.md](https://raw.githubusercontent.com/deepkicks/TitaniaPy/main/README.md),
+HTTP 200) documents the extraction path rather than only the wall. **Its summary line, verbatim:
+"The tool is one key away from full PUP decryption."**
+
+**The extraction chain, as documented rather than inferred.** Three steps:
+
+```
+1. Dump the pup_update0 ioctl/open/close handler code   (only needs kernel R/W)
+2. analyze_dump.py on PC: auto-disassembles the handlers, finds the key source
+3. Re-run the payload with the -a <address> it returns
+```
+
+**This is the same device this note names, reached from the other side.** Their approach 3 goes
+further and names the operation: *"Invokes `DecryptHeader` ioctl with type=1 (system update key)
+between pre/post LSB snapshots to catch key loading"*, which is `encsrv_decrypt_header` at
+`0xC0184402` on `/dev/pup_update0` described above. **Two independent readings of the same
+ioctl, one from the kernel image and one from a payload that calls it.**
+
+**The kernel access requirement, in the source's own words:** *"kernel R/W via Byepervisor Reborn
++ Relapse + etaHEN or similar"*, with the caller expected to supply `kernel_read64` and
+`kernel_copyout`. **The precondition is identical to the one this note states: a jailbroken PS5 on
+FW 13.60 or below.** They also hold the same artifact pair this note compares at `0x400`:
+`analyze_dump.py` takes `--pup14` and `--pup14_1`.
+
+**Three details worth recording from the full read.**
+
+**Their prose and their table disagree on the count.** The README says the tool *"handles 3 of 4
+crypto layers"*, while its own table marks layers 0 and 3 solved and layers 1 and 2 blocked, with
+layer 2 blocked as a dependent of layer 1. **Two layers are solved and two are blocked; the
+"3 of 4" is a looser statement than the table supports.** The dependency is the useful part:
+**layer 2 does not need its own key discovery, it needs layer 1.**
+
+**The payload is no longer read-only.** The README records that *"V4 has replaced V2"* and that
+*"V4 possesses abilities to flash southbridge WITHOUT a backup."* **A tool whose earlier
+versions were a diagnostic and whose current version can write southbridge flash without first
+backing it up changes what running it costs.** Worth knowing before anyone runs it on the one
+console that can extract the key.
+
+**The key set they already hold** is enumerated as ROM, keyseeds, OTP/KDF, Titania and firmware
+keys, with the note that referenced keys are publicly documented on psdevwiki. **The missing key
+is not missing for lack of looking; it is the one that does not leave the security processor
+without code execution on the console.**
+
+**A third public assertion of the same blocker, with its sourcing stated.** A GBAtemp thread of
+2026-10-15 is titled *"Built a PC-based PUP decrypt tool: one key away from decrypting any
+firmware forever. Need someone on 13.60 to run an extraction payload"*
+([gbatemp.net/…/685380](https://gbatemp.net/threads/built-a-pc-based-pup-decrypt-tool-one-key-away-from-decrypting-any-firmware-forever-need-someone-on-13-60-to-run-an-extraction-payload.685380/)).
+**The page sits behind a Cloudflare challenge: a direct fetch returns HTTP 403 with a "Just a
+moment…" interstitial, so the thread body was never read.** The title, the date and one snippet
+line, *"a read-only diagnostic tool that dumps information about how the PS5 handles PUP
+firmware decryption"*, are what the record holds. **Its wording is close enough to TitaniaPy's
+that the two may be the same author posting in two places, a day apart; independence between them
+is not established.** **The facts do not depend on settling that question: the layer structure,
+the blocked key and the 13.60 precondition are verified against the TitaniaPy README, whoever
+wrote the forum thread.**
+
+**What this changes about the blocker.** The universality of the Layer 1 key is claimed publicly
+outside this note, and the extraction precondition matches rather than conflicts. **The PC side of
+the decryption is being built while the extraction side waits for hardware: layers 0 and 3
+solved, layers 1 and 2 waiting on a single key that requires code execution on an older console.
+That is the shape of the blocker across the ecosystem, not a limit of this one project.**
+
 **What this changes and what it does not.** The point of this section was and remains that every
 static kernel conclusion in this note is drawn from **13.60**. That is untouched. What changed is
 that the 14.00 artifact is now **procurable and identified**, and the remaining distance between
