@@ -1,6 +1,5 @@
 # Reading the Gate, Not the Lock: The `sysctl` Kind Swap on PlayStation 5 Firmware 14.00
 
-
 **Research:** logicalpeyote — Morini Computers
 **Engagement:** `ps5-1400-kernel`
 **Dates:** 2026-11-06 → 2026-11-07
@@ -8,34 +7,12 @@
 
 ---
 
-## Abstract
 
-This note records what was found, and how, during a two-day offensive characterisation of
-PlayStation 5 firmware 14.00 reached through the system User's Guide browser. Five userland
-primitives were confirmed on device: a re-entrant `HTMLCanvasElement.getContext()`
-use-after-free with bidirectional read/write over the reclaimed object, an independent
-`TransformStream` iterator confusion, a bounded heap-pointer disclosure through `FontFace`
-reclamation, a WebProcess ROP frame reaching six controlled system-call arguments, and a hard
-map of the Web APIs the guide sandbox exposes. The kernel-side question — whether the `oid_kind`
-swap used as a black box since 13.60 does what its name suggests — was answered from a 103 MB
-symbol-less dump of firmware **13.60**, the only image available (§6.0). It does not: the swap
-leaves `CTLTYPE` untouched and invisible to every type dispatch in the sysctl zone, and changes
-one `test`/`je` pair at `0xffffffff9e947f49` that makes the kernel skip the
-`PRIV_SYSCTL_WRITE` check. It is a permission bypass, not a type confusion, and not by itself a
-write primitive; under that reading the OID image yields 303 writable OIDs against 332
-read-only. What remains unsolved is **two independent gaps** — a WebKit code leak is missing,
-and no kernel bug yielding read/write has been found — with seven candidate routes to the leak
-closed on device by seven different classes of evidence, including a bit-level round-trip that
-localises flush-to-zero to the float setter path rather than to JavaScript's number model, and
-the discovery that `libkernel_web` is **`xotext`** — execute-only text, so reading it through a
-read/write primitive faults — and the resulting reframe of the leak from *reading code* to
-*reading data that contains code addresses*. The engagement's largest defect was in
-its own tooling: a reporting helper rewritten without a `return` silently broke **125 of 146
-probes** while they kept reporting normally.
+# Part I — What works
 
----
+*The chain that is confirmed on device: entry, the two WebKit confusions, the read/write primitive, the syscall path, and the kernel mechanism we characterised.*
 
-## 1. Introduction
+## 1. Introduction `[new]`
 
 Two findings anchor this note: a set of userland primitives in the PlayStation 5 User's Guide
 browser, confirmed live on a single console, and a correction to a piece of folklore.
@@ -73,11 +50,82 @@ Everything below is tagged with its evidence class:
 
 Claims that could not be placed in the first three rows are stated as unresolved rather than
 smoothed over. Several earlier conclusions of this engagement were retracted mid-flight; those
-retractions are in §7.5 rather than quietly deleted.
+retractions are in §13.5 rather than quietly deleted.
+
+### 1.1 What is established on device
+
+Before the kernel result, it is worth stating plainly what this engagement *has*, because the
+userland side is not folklore and does not depend on the kernel question at all. Three things
+were confirmed live on the 14.00 console, and each carries its raw output rather than a summary.
+
+**CVE-2026-43720 is present and its re-entrancy is unguarded on this build.** The trigger probe
+fired the `getContext()` getter re-entrantly and got back two distinct wrapper objects:
+
+```
+TRIGGER   getter=1  inner=true  outer=true  same=false
+note: "distinct inner/outer wrappers - reentrancy NOT guarded on this build"
+outcome: VULNERABLE
+```
+
+**[device]** The `same=false` is the whole enabling condition. On a build where re-entrancy is
+guarded, the inner and outer calls return the same wrapper and there is no window. Here they do
+not, and the window exists.
+
+**The reclaimed object gives a bidirectional read/write, in both directions, proven separately.**
+This is the load-bearing result of the userland side:
+
+```
+SPRAYED   n=80
+WRITE     ok=true  a=99.001
+CHANNEL   match=true  a=11.110011
+ALIAS     idx=3
+REVERSE   bidirectional=true
+outcome: VULNERABLE
+detail: {sprayed: 80, channel: true, write_ok: true, alias_idx: 3,
+         bidirectional: true, prop_alias: true}
+```
+
+**[device]** Two directions were tested as separate assertions, not inferred from one. `WRITE`
+carries a value in through the public setter and `CHANNEL` confirms it landed with a different
+value (`99.001` written, `11.110011` read back through the alias — the alias is a distinct
+object, not a mirror of the writer). `REVERSE` then proves the opposite direction independently.
+`prop_alias: true` records that the aliasing holds through property access, not only through the
+method surface.
+
+**A second, orthogonal confusion exists at the iterator level.** `ntfusion-iterator-confusion`
+returns `CONFUSED` with a differential inside it: a control-conforming iterator does not throw
+where a plain object does.
+
+```
+variants: [ {label: "control-conforming", threw: false, verdict: "no-throw"},
+            {label: "plain-object",       threw: true,  ctor: "TypeError"}, ... ]
+outcome: CONFUSED
+```
+
+**[device]** This is reported as a **reachability gate, not a primitive** — see §4. It confirms
+a confusion exists but does not by itself yield a read or a write.
+
+**What the chain currently is, stated exactly.** Re-entrant `getContext()` → distinct inner/outer
+wrapper → same-type reclaim of the freed slot → bidirectional read/write over the reclaimed
+object. **Every link in that chain is confirmed on device.** What the chain does *not* yet reach
+is an address: the primitive reads and writes a window it cannot locate, which is the code-leak
+gap of §12.2 and not a defect in the chain.
+
+**Where the novelty actually sits, and what backs it.** The userland primitives are confirmations
+of a known CVE on a new firmware — valuable as a device measurement, not as a novel finding.
+**The novel contribution is the kernel characterisation in §4: that the `oid_kind` swap is a
+permission-check bypass rather than a type confusion.** That claim is backed by three
+independent static observations (the untouched `CTLTYPE` nibble across ten dispatch sites, the
+single moved `test`/`je` pair at a named address, and the privilege-selector constants resolving
+to 241/242) and by a novelty survey finding zero prior published characterisation of it (§14.4).
+**The distinction matters for how much weight to put on each part of this note: one half is
+confirmed measurement of known things, the other half is a new reading of something everyone
+else used as a black box.**
 
 ---
 
-## 2. Target and entry vehicle
+
+## 2. Target and entry vehicle `[already known]`
 
 ### 2.1 The console
 
@@ -134,7 +182,7 @@ file_offset = virtual_address - 0xffffffff9e3f0000
 ```
 
 **[static]** The mapping is valid for the static image only; it broke exactly once,
-instructively (§7.5). Tooling: capstone 5.0.7 x86-64 `detail=True`, cross-checked with
+instructively (§13.5). Tooling: capstone 5.0.7 x86-64 `detail=True`, cross-checked with
 `objdump -D -b binary -m i386:x86-64 --adjust-vma=0xffffffff9e3f0000`. Two environment traps
 cost time and are worth recording: the host venv's `bin/python` points at 3.13 while
 `site-packages` holds 3.12 packages, so capstone needs an explicit
@@ -144,9 +192,130 @@ import with an error that does not mention either file.
 
 ---
 
-## 3. Userland primitives
 
-### 3.1 What the guide sandbox exposes
+## 3. CVE-2026-43720 — the canvas re-entrancy `[already known]`
+
+### 3.1 What the bug is
+
+`HTMLCanvasElement.getContext()` is not re-entrancy-safe. Calling it a second time from inside
+the settings-object conversion of a first call causes the first call's context object to be
+freed while a live reference to it is still held by the caller. The result is a use-after-free on
+a 768-byte `CanvasRenderingContext2D` allocation.
+
+The bug is WebKit bug 313175. Upstream characterises it as **unpatched on 14.10**, confirmed by
+their probe `p553` on 2026-10-26, with the writable surface being the 6×float64 transform
+matrix plus seven numeric properties over the 768-byte context. **14.00 (2026-09-16) predates
+14.10 (2026-10-01), so the finding transfers** **[upstream]**.
+
+What was not known before this engagement, and what we measured, is whether the bug is *live and
+usable* on 14.00 specifically — as opposed to present in the source and unreachable in the
+build. That is a different question and it needed a device.
+
+### 3.2 How we exploit it
+
+Three probes, run in sequence, each answering a different question **[device]**:
+
+```
+CVE-2026-43720-trigger   -> VULNERABLE      same: false    getter: 1
+43720-bitmap-trigger     -> REENTRY-DIFFERENT-CTX
+                                             reentrant: true
+                                             same: false
+                                             other_unchanged: true
+CVE-2026-43720-rw        -> VULNERABLE      sprayed: 80
+                                             write_ok: true
+                                             bidirectional: true
+                                             prop_alias: true
+                                             alias_idx: 3
+```
+
+**Step 1 — prove the window exists.** The trigger calls `getContext()` re-entrantly and compares
+the two handles. `same: false` means they are distinct objects, so the outer one can be freed
+while the inner reference survives. `getter: 1` is the load-bearing field: **the settings getter
+is not guarded against re-entrancy on this build.** On a build where it is guarded, both calls
+return the same wrapper and there is no window at all.
+
+**Step 2 — prove the window is not self-cleaning.** The bitmap-trigger variant checks what
+happens to the *other* context after the re-entry. `other_unchanged: true` with
+`reentrant: true` says the second context is a genuinely separate object that the engine did not
+silently reconcile. This rules out the benign reading in which re-entrancy returns a fresh object
+and the old one stays valid.
+
+**Step 3 — prove we can read and write through it.** A spray of 80 one-by-one canvases reclaims
+the freed slot; `alias_idx: 3` identifies which spray element took it. Then two directions are
+asserted **separately**, not inferred from one another:
+
+```
+WRITE   ok=true  a=99.001        value pushed through the public setter
+CHANNEL match=true  a=11.110011  value read back through the alias (a different object)
+REVERSE bidirectional=true       the opposite direction, tested on its own
+```
+
+`prop_alias: true` records that the aliasing holds through **property access**, not only through
+the method surface — which is what makes it usable as a search tool rather than only as a
+modification tool.
+
+### 3.3 What the primitive gives us, and what it does not
+
+**It gives us** a live, bidirectional read/write window over a reclaimed 768-byte object, reached
+from ordinary DOM calls, with no JIT and no WebAssembly required.
+
+**It does not give us the address of that object.** The window is positioned relative to
+something we control, but its absolute location in memory is unknown, and the value channel is
+float64 — which is where §10 comes in. **This is the single thing standing between a working
+userland primitive and a usable one, and it is the same wall upstream reports.**
+
+Memory was bounded deliberately: 1×1 canvases, a spray of 80, under the ~100 MB ceiling that
+killed an earlier plan.
+
+
+## 4. The `ntfusion` iterator confusion `[new]`
+
+### 4.1 What the bug is
+
+WebKit's iterator handling accepts a replaced `Array.prototype[Symbol.iterator]` that yields
+**plain objects where iterator-result records are expected**. Constructing a `TransformStream`
+over such an array drives the engine down a path that assumes the record shape and does not
+validate it.
+
+This is independent of the canvas family: different entry point, different object family,
+different detection signal. **It is a second WebKit confusion on 14.00, not a second symptom of
+the first one.**
+
+### 4.2 How we exploit it — and why we call it a gate, not a primitive
+
+```
+ntfusion-iterator-confusion -> CONFUSED
+                              control_clean: true
+                              confused_variants: 4
+                                control-conforming   : no throw
+                                plain-object         : yes (TypeError, "Internal Transfo…")
+                                object-with-heapref  : yes
+                                truncated            : yes
+                                non-record-result    : yes
+```
+
+**`control_clean: true` is what makes this a finding rather than noise.** A conforming iterator
+does not throw, so the four throwing variants are a genuine divergence and not a module that
+merely always errors. Without the control, the whole result would be uninterpretable.
+
+**The scope needs stating narrowly, because the module that produced it states it narrowly.** The
+verdict `CONFUSED` means the confusion path is **reachable**. The module's own comments record
+that a `TypeError` here is the PoC's PASS and that *"we only report reachability, never infer
+exploitability from a throw."*
+
+| | Status |
+|---|---|
+| Confusion reachable | **confirmed** **[device]** |
+| Confused object produced and retained | **not done** |
+| Pointer scan on that object | **not done** (depends on the above) |
+| Deref → arbitrary read | **not tested** |
+
+**Treating a reachability signal as a primitive is exactly the error class §13.8 is about**, and
+it is the reason this chapter exists separately rather than being folded into the primitives of
+§3. The confusion is real and it is ours to try; it is not, today, a read or a write.
+
+
+## 5. What the guide sandbox exposes `[new]`
 
 The first module run was deliberately boring: enumerate the Web APIs. It decided whether
 anything else on the queue was runnable at all.
@@ -173,131 +342,10 @@ primitives before they are tried. `SharedArrayBuffer` is likewise absent, making
 `Atomics.waitAsync` decorative: no SAB-based grooming, no cross-thread race surface.
 **[device]** `structuredClone`, however, **is present** — worth flagging precisely because the
 published Relapse WebKit stage is built on a structured-clone pool mismatch: the primitive
-exists on 14.00, the mismatch does not (§3.5). **[device]**
+exists on 14.00, the mismatch does not (§11). **[device]**
 
-### 3.2 Canvas re-entrancy: the read/write primitive
 
-A use-after-free reached by re-entering `getContext()` from inside the dictionary conversion of
-an outer `getContext()` call. Three modules, run in sequence **[device]**:
-
-```
-CVE-2026-43720-trigger     -> VULNERABLE      same: false    getter: 1
-43720-bitmap-trigger       -> REENTRY-DIFFERENT-CTX
-                                                reentrant: true
-                                                same: false
-                                                other_unchanged: true
-CVE-2026-43720-rw          -> VULNERABLE      sprayed: 80
-                                                write_ok: true
-                                                bidirectional: true
-                                                prop_alias: true
-                                                alias_idx: 3
-```
-
-`getter: 1` is the load-bearing field in the first line: the settings getter is **not**
-guarded against re-entrancy. `bidirectional: true` is the load-bearing field in the third:
-the primitive reads as well as writes, which makes it a search tool and not only a
-modification tool. `prop_alias: true` with `alias_idx: 3` confirms the attacker-controlled
-handle and the reclaimed object alias the same memory.
-
-Upstream characterises the same bug (WebKit bug 313175) as unpatched on 14.10, confirmed by
-probe `p553` on 2026-10-26, with the writable surface being the 6×float64 transform matrix
-plus seven numeric properties over a 768-byte Canvas2D context. 14.00 (2026-09-16) predates
-14.10 (2026-10-01), so the finding transfers **[upstream]**. Memory was bounded deliberately:
-1×1 canvases, a spray of 80, under the ~100 MB ceiling that killed an earlier plan.
-
-### 3.3 Denormal-zeroing: why the primitive cannot read pointers back
-
-The same run that confirmed the write also produced the engagement's most annoying negative:
-
-```
-CVE-2026-43720-leak  ->  integer-read-zero
-                          channel: true
-                          alias_idx: 6
-                          nonzero_bytes: 0
-                          raw_first32: all zeros
-                          bigint_read: "0"
-```
-
-**[device]** The channel works, the alias is live, and every byte reads back as zero.
-
-**[device]** The channel works, the alias is live, and every byte reads back as zero. The cause
-is the FPU mode the PS5's WebKit runs under: WebProcess heap pointers have the form
-`0x000000100xxxxxxx`, whose exponent field makes the value **denormal** as an IEEE-754 double;
-with denormals-are-zero set the FPU reads `0.0`. The pointer is present in memory and
-unreadable through any float64 lane. The workaround is a width change, not a location change:
-read through `BigUint64Array` or `Uint8Array`, which never enter the FPU.
-
-The enabling condition on the write side is equally specific. `ISO_MALLOC` is **off** in the
-PS5 WebKit build (`OptionsPlayStation.cmake`), which is why engine-written pointers land in
-storage script can subsequently read; had isolation been on, the bidirectional result of §3.2
-would not have been reachable at all.
-
-### 3.4 A second, orthogonal confusion
-
-The `ntfusion` iterator confusion reproduced on 14.00:
-
-```
-ntfusion-iterator-confusion -> CONFUSED
-                              control_clean: true
-                              confused_variants: 4
-                                control-conforming   : no throw
-                                plain-object         : yes (TypeError, "Internal Transfo…")
-                                object-with-heapref  : yes
-                                truncated            : yes
-                                non-record-result    : yes
-```
-
-**[device]** `evidence/k4_fdtype_vacuous_negatives.md`, plans 686–690.
-
-`control_clean: true` is what makes this a finding rather than noise: a conforming iterator
-does not throw, so the four throwing variants are a genuine divergence and not a module that
-merely always errors. The technique is to replace `Array.prototype[Symbol.iterator]` so the
-iterator yields plain objects where iterator-result records are expected, then construct a
-`TransformStream`.
-
-This is a **second independent WebKit confusion on 14.00**, orthogonal to the canvas family:
-different entry point, different object family, different detection signal.
-
-Its scope needs stating narrowly, because the module that produced it states it narrowly. The
-verdict `CONFUSED` means the confusion path is **reachable** — the module's own code comments
-that a `TypeError` here is the PoC's PASS and that *"we only report reachability, never infer
-exploitability from a throw."* It is **not** a read/write primitive. The distinction is not
-pedantry: treating a reachability signal as a primitive is exactly the error class §7.8 is
-about.
-
-| | Status |
-|---|---|
-| Confusion reachable | **confirmed** **[device]** |
-| Confused object produced and retained | **not done** |
-| Pointer scan on that object | **not done** (depends on the above) |
-| Deref → arbitrary read | **not tested** |
-
-### 3.5 What the published WebKit stage does not do here
-
-The Relapse WebKit stage was run against 14.00 as shipped and failed uniformly:
-
-```
-122 / 122 identical failures
-getterCarrier returning 7 is a Number object regardless of leakedScope
-  -> Symbol.prototype.toString.call throws
-structured-clone corruption never lands in the form that makes the wrapper
-   read as a Symbol with oversized length (LEAK_STRING_LENGTH 924176)
-```
-
-**[device]** `evidence/jsc-fingerprint-1400.md`, `evidence/webkit-entry-portability-1400.md`.
-
-**[device]** `evidence/jsc-fingerprint-1400.md`, `evidence/webkit-entry-portability-1400.md`.
-**[device]** `evidence/jsc-fingerprint-1400.md`, `evidence/webkit-entry-portability-1400.md`.
-Plan 4 had the getter return `Symbol("x" × 924168)`: **663 attempts, 663 × `Invalid leaked
-addresses`**. Plan 5 set `copiedLength = 924176`, matching `LEAK_STRING_LENGTH` **by
-construction** (924168 + `Symbol(` + `)`), not by corruption — every captured word was `0x7878`
-widened to `0x7878787878787878`, failing the cell/holder cross-checks at offsets 8 and 12. The
-mechanism itself is intact (a Proxy trap fires on all variants, `trap_calls = 4`); what changed
-is that the bare super-property form no longer passes a receiver — the stock `leak()` bare call
-produced ~150 × "Scope not leaked" at stage 0. The structured-clone corruption the published
-stage depends on does not occur on JSC 14.00: the stage is dead, not misconfigured.
-
-### 3.6 Reaching a system call from the browser
+## 6. Reaching a system call from the browser `[new]`
 
 A ROP frame over WebProcess gadgets was built and verified in V8 before touching the console:
 
@@ -329,105 +377,12 @@ states "Not found: `pop r8`, `pop r9` … (confirmed absent in full 4.6 MB scan,
 limit belongs to the game eboot used by the loader path. The WebProcess has `pop r8` and
 `pop r9`. The kind swap can be driven from the browser through a real system call.
 
-### 3.7 Execute-only text: the constraint that reframes the leak
-
-The PS5 system libraries (`libkernel_web`) are **`xotext` — execute-only text**. Reading that
-code through a read/write primitive does not return garbage and does not return zeros; it faults.
-
-> *"Signature-scanning libkernel **text** is impossible (the libraries are **xotext**; reading
-> code through the R/W primitive **faults and kills the process**)."*
-
-**[upstream]** `1nk1/PS5-Prolapse`, `docs/PROJECT_HANDOFF.md` §9.2 — from a working jailbreak,
-hardware-verified on 13.60. **The scope of this claim is libkernel, and nothing more.** Both
-occurrences of `xotext` in the handoff (lines 381 and 853) name libkernel; neither mentions
-WebKit. Whether WebKit's text is also execute-only is **not asserted by the source and not tested
-by us** — and §3.7.2 will argue that it does not need to be known.
-
-The same source confirms the corollary that the static route is closed for them too: *"there is
-no 13.60 [sprx] locally, which is precisely why the runtime calibrate tile exists."* We
-verified the same on our own host: `find /opt/AGENTS/Ares -iname "*.sprx"` returns nothing, and
-`ps5-sys.pup` yields no readable `.sprx` string through its encrypted L1.
-
-**3.7.1 What the constraint does and does not close.** The plan carried through most of this
-research — *"scan WebKit text for `5f c3` / `5e c3` / `5a c3` / `59 c3` and rebuild the gadget
-map"* — is closed, but the accurate statement of why matters. For `libkernel` the closure is
-hard: reading the text faults. For WebKit the stronger and better-supported statement is not
-that the scan **cannot** be run but that **it is not the route taken by the people who have this
-working — they have never read a single byte of WebKit code.** That claim does not depend on
-assuming WebKit is `xotext`, and it is the one worth carrying.
-
-There is a cross-check already in the record: the community `wk_gadgetmap` contains **no
-`0f 05`**. That is consistent with the text being unreadable, but it is not proof of it — the
-absence is equally consistent with the map having been built by a method that never read the text
-either, which is what §3.7.2 shows.
-
-**3.7.2 The reframe — read the address, not the code.** This is the more useful product of the
-finding.
-
-| How the problem was posed for weeks | How it has to be posed |
-|---|---|
-| leak the WebKit base by **reading code** | leak the base by **reading data that contains code addresses** |
-
-The code is not needed; the *address* is, and addresses live in readable data. Their derivation
-(`main.js:158-212`) never touches a text page:
-
-```js
-let textAreaVtPtr = p.read8(p.leakval(textArea).add32(0x18));
-let textAreaVtable = p.read8(textAreaVtPtr);
-```
-
-On 9.00+ the active path is a JS global holding a code address, minus a candidate offset, with
-range and page-alignment validation — `ctor - hc` checked into the `0x8…0` / `0x4000`-aligned
-window. The pre-9.00 legacy path reads the **vtable**, which lives in `.data.rel.ro`: data, not
-execute-only text. That legacy branch fired **0 times across 81 recorded runs**. The whole method
-is *"read the address of the code from the data"*, never *"read the code"*.
-
-**3.7.3 The deltas are family-specific, not module-invariant.** Recalculated from the `EXPECT`
-table in `tools/lkfind.js` rather than copied, the stability is narrower than the headline
-deltas suggest:
-
-```
-FW       sw       sj       lj       tl        pop_rsp
-10.00    0x14DC   0x3A68   0x3AC1   0x4B13D  0x1B2CF  (present)
-12.00    0x162C   0x3BB8   0x3C11   0x4AA1D  ABSENT
-12.40    0x162C   0x3BB8   0x3C11   0x4E9FD  ABSENT
-```
-
-**[static]** Recomputed from the upstream table. The deltas `+0x162C` / `+0x3BB8` / `+0x3C11`
-are exact **for the 12.xx family**. They are **not** a property of `libkernel_web` in general:
-on 10.00 all three differ. And `thread_list` is not stable even *within* 12.xx — `0x4AA1D` at
-12.00 versus `0x4E9FD` at 12.40.
-
-| Field | Stable within 12.xx | Stable across families |
-|---|---|---|
-| `syscall_wrapper` | ✓ | ✗ |
-| `setjmp` | ✓ | ✗ |
-| `longjmp` | ✓ | ✗ |
-| `thread_list` | **✗** | ✗ |
-
-**Stability has to be recorded field by field, not per table.** Anyone treating "the deltas" as a
-single block would get `thread_list` wrong while staying inside 12.xx. **For 14.00 the deltas are
-to be measured, not inherited.** `pop_rsp` works as a negative control in the meantime: present
-at `0x343AA` on 10.00, absent on both 12.xx builds — its absence is what says the `pop rsp` has
-to come from WebKit.
-
-We cannot copy their harness outright: their method reads the stack of a worker, and `worker` is
-`SecurityError` in the guide WebProcess (§3.1). The open question it leaves is narrow and
-concrete — **which stack is ours**: the main JS thread's, a self-allocated `ArrayBuffer` that
-something returns into, or the canvas backing store already under test. If any of the three is
-readable and holds a `libkernel_web` return address, the deltas yield `syscall_wrapper` without
-ever touching execute-only code.
-
-**The conclusion is more useful than a prohibition would have been.** We do not know whether
-WebKit's text is readable, and we do not need to: the working method never touches it. That is a
-weaker-looking and considerably stronger claim than a generalised ban the source does not support.
-
-## 4. The sysctl kind swap: what it actually does
+## 7. The sysctl kind swap: what it actually does `[new]`
 
 This section is the core of the note. Everything in it is **[static]** unless marked
 otherwise.
 
-### 4.1 Finding the dispatch without a symbol table
+### 7.1 Finding the dispatch without a symbol table
 
 With no symbols, the question "which function handles `kern.osrevision`?" cannot be asked
 directly. It was answered arithmetically.
@@ -465,7 +420,7 @@ The swap byte is byte-identical under both base conventions:
 **[static]** This identity is why the community's published swap offset survives a change in
 how the structure base is counted.
 
-### 4.2 The swap is one byte
+### 7.2 The swap is one byte
 
 ```
 0x80048002  ->  0x70048002
@@ -477,7 +432,7 @@ differing byte index: 3
 **[static]** Verified by simulation on five OIDs — `osrevision`, `osreldate`, `ncpu`,
 `pagesize`, `byteorder`. One byte, at `oid_kind + 3`.
 
-### 4.3 The type field is untouched
+### 7.3 The type field is untouched
 
 `CTLTYPE` is `kind & 0xf`. **[upstream]** `sys/sys/sysctl.h`: `#define CTLTYPE 0xf`,
 `CTLTYPE_INT 2`.
@@ -494,7 +449,7 @@ only one that touches a swapped bit**.
 
 **[static]** The swap is invisible to type dispatch. It is not a type confusion.
 
-### 4.4 The one branch that moves
+### 7.4 The one branch that moves
 
 ```
 0xffffffff9e947f45   41 8b 47 1c      mov   eax, dword ptr [r15 + 0x1c]
@@ -561,9 +516,9 @@ This is the answer to the question the folklore never asked. The swap does not c
 kernel about what kind of value this is. It sets the flag that says *anybody may write this*,
 and the kernel's own permission logic agrees.
 
-### 4.5 The full gate chain
+### 7.5 The full gate chain
 
-The same `eax = [oid + 0x1c]` feeds three gates upstream of the branch in §4.4:
+The same `eax = [oid + 0x1c]` feeds three gates upstream of the branch in §7.4:
 
 ```
 0xffffffff9e947eb1:  cmp  qword ptr [rbx + 0x30], 0
@@ -596,7 +551,7 @@ Control-flow-graph entry counts confirm the three-way separation:
 
 The check block has exactly one entry, and the swap closes it.
 
-### 4.6 The check denies when it runs
+### 7.6 The check denies when it runs
 
 The check is reachable **only** via the bextr path — `jne@ed2 → bextr esi, eax, 0x414 →
 call 0xffffffff9e69a9b0 → fallthrough 0xf34 → test eax, 0x10000000 → je 0xedb` — that is,
@@ -650,7 +605,7 @@ of further static work closes it; it needs a live instance. Three claims, each s
 verified: the check denies when executed (verified on bytes), our OID never executes it
 (verified on the CFG), and the swap is load-bearing (verified).
 
-### 4.7 Verdict
+### 7.7 Verdict
 
 **The kind swap is a permission bypass.**
 
@@ -662,9 +617,10 @@ One address carries the entire console-verification burden: **`0xffffffff9e947f4
 
 ---
 
-## 5. The sysctl write path and the 303 writable OIDs
 
-### 5.1 The handler and its own CFI guard
+## 8. The sysctl write path and the 303 writable OIDs `[new]`
+
+### 8.1 The handler and its own CFI guard
 
 The shared `ncpu` / `osrevision` / `pagesize` handler was disassembled directly:
 
@@ -706,7 +662,7 @@ loaded from `[req + 0x48]` with `N = 0x16`.
 Earlier notes described this as "writes into `oid_arg1`". That is an interpretation of
 intent, not what the bytes show, and the difference matters for anyone building on it.
 
-### 5.2 The CFI window
+### 8.2 The CFI window
 
 Handler dispatch is guarded by an identity test of the form
 `sub rax, r15; ror rax, 3; cmp rax, N; ja reject`.
@@ -722,7 +678,7 @@ The census that makes this an identification rather than a guess: **5,146** comp
 
 **[static]** The sysctl handler window was identified by arithmetic, not by name.
 
-### 5.3 The writable-OID scan
+### 8.3 The writable-OID scan
 
 With the mechanism understood, the writable surface was enumerated directly from the OID
 image. The scan iterates candidate OID structures and classifies on the flag bits:
@@ -759,7 +715,7 @@ list has been written from the console. What the scan establishes is the size an
 surface; what it does not establish is that any particular entry is reachable from the guide
 browser with the privileges that process holds.
 
-### 5.4 The amplifier, and why it is not one
+### 8.4 The amplifier, and why it is not one
 
 A natural follow-on: if a one-byte write can change `kind`, can it amplify into a bulk copy?
 Two one-byte primitives on the same field were designed — QUAD → STRING changes byte **index 0**
@@ -806,12 +762,165 @@ the dispatch model rules the whole approach out first.
 
 ---
 
-## 6. What remains unsolved
+
+# Part II — Tested and proven dead
+
+*Routes that were fired and closed, each with the evidence class that closed it. These are not unsearched ground.*
+
+## 9. Execute-only text: the constraint that reframes the leak `[new]`
+
+The PS5 system libraries (`libkernel_web`) are **`xotext` — execute-only text**. Reading that
+code through a read/write primitive does not return garbage and does not return zeros; it faults.
+
+> *"Signature-scanning libkernel **text** is impossible (the libraries are **xotext**; reading
+> code through the R/W primitive **faults and kills the process**)."*
+
+**[upstream]** `1nk1/PS5-Prolapse`, `docs/PROJECT_HANDOFF.md` §9.2 — from a working jailbreak,
+hardware-verified on 13.60. **The scope of this claim is libkernel, and nothing more.** Both
+occurrences of `xotext` in the handoff (lines 381 and 853) name libkernel; neither mentions
+WebKit. Whether WebKit's text is also execute-only is **not asserted by the source and not tested
+by us** — and §9.2 will argue that it does not need to be known.
+
+The same source confirms the corollary that the static route is closed for them too: *"there is
+no 13.60 [sprx] locally, which is precisely why the runtime calibrate tile exists."* We
+verified the same on our own host: `find /opt/AGENTS/Ares -iname "*.sprx"` returns nothing, and
+`ps5-sys.pup` yields no readable `.sprx` string through its encrypted L1.
+
+### 9.1 What the constraint does and does not close. The plan carried through most of this
+research — *"scan WebKit text for `5f c3` / `5e c3` / `5a c3` / `59 c3` and rebuild the gadget
+map"* — is closed, but the accurate statement of why matters. For `libkernel` the closure is
+hard: reading the text faults. For WebKit the stronger and better-supported statement is not
+that the scan **cannot** be run but that **it is not the route taken by the people who have this
+working — they have never read a single byte of WebKit code.** That claim does not depend on
+assuming WebKit is `xotext`, and it is the one worth carrying.
+
+There is a cross-check already in the record: the community `wk_gadgetmap` contains **no
+`0f 05`**. That is consistent with the text being unreadable, but it is not proof of it — the
+absence is equally consistent with the map having been built by a method that never read the text
+either, which is what §9.2 shows.
+
+### 9.2 The reframe — read the address, not the code. This is the more useful product of the
+finding.
+
+| How the problem was posed for weeks | How it has to be posed |
+|---|---|
+| leak the WebKit base by **reading code** | leak the base by **reading data that contains code addresses** |
+
+The code is not needed; the *address* is, and addresses live in readable data. Their derivation
+(`main.js:158-212`) never touches a text page:
+
+```js
+let textAreaVtPtr = p.read8(p.leakval(textArea).add32(0x18));
+let textAreaVtable = p.read8(textAreaVtPtr);
+```
+
+On 9.00+ the active path is a JS global holding a code address, minus a candidate offset, with
+range and page-alignment validation — `ctor - hc` checked into the `0x8…0` / `0x4000`-aligned
+window. The pre-9.00 legacy path reads the **vtable**, which lives in `.data.rel.ro`: data, not
+execute-only text. That legacy branch fired **0 times across 81 recorded runs**. The whole method
+is *"read the address of the code from the data"*, never *"read the code"*.
+
+### 9.3 The deltas are family-specific, not module-invariant. Recalculated from the `EXPECT`
+table in `tools/lkfind.js` rather than copied, the stability is narrower than the headline
+deltas suggest:
+
+```
+FW       sw       sj       lj       tl        pop_rsp
+10.00    0x14DC   0x3A68   0x3AC1   0x4B13D  0x1B2CF  (present)
+12.00    0x162C   0x3BB8   0x3C11   0x4AA1D  ABSENT
+12.40    0x162C   0x3BB8   0x3C11   0x4E9FD  ABSENT
+```
+
+**[static]** Recomputed from the upstream table. The deltas `+0x162C` / `+0x3BB8` / `+0x3C11`
+are exact **for the 12.xx family**. They are **not** a property of `libkernel_web` in general:
+on 10.00 all three differ. And `thread_list` is not stable even *within* 12.xx — `0x4AA1D` at
+12.00 versus `0x4E9FD` at 12.40.
+
+| Field | Stable within 12.xx | Stable across families |
+|---|---|---|
+| `syscall_wrapper` | ✓ | ✗ |
+| `setjmp` | ✓ | ✗ |
+| `longjmp` | ✓ | ✗ |
+| `thread_list` | **✗** | ✗ |
+
+**Stability has to be recorded field by field, not per table.** Anyone treating "the deltas" as a
+single block would get `thread_list` wrong while staying inside 12.xx. **For 14.00 the deltas are
+to be measured, not inherited.** `pop_rsp` works as a negative control in the meantime: present
+at `0x343AA` on 10.00, absent on both 12.xx builds — its absence is what says the `pop rsp` has
+to come from WebKit.
+
+We cannot copy their harness outright: their method reads the stack of a worker, and `worker` is
+`SecurityError` in the guide WebProcess (§3.1). The open question it leaves is narrow and
+concrete — **which stack is ours**: the main JS thread's, a self-allocated `ArrayBuffer` that
+something returns into, or the canvas backing store already under test. If any of the three is
+readable and holds a `libkernel_web` return address, the deltas yield `syscall_wrapper` without
+ever touching execute-only code.
+
+**The conclusion is more useful than a prohibition would have been.** We do not know whether
+WebKit's text is readable, and we do not need to: the working method never touches it. That is a
+weaker-looking and considerably stronger claim than a generalised ban the source does not support.
+
+
+## 10. Denormal-zeroing: why the primitive cannot read pointers back `[new]`
+
+The same run that confirmed the write also produced the engagement's most annoying negative:
+
+```
+CVE-2026-43720-leak  ->  integer-read-zero
+                          channel: true
+                          alias_idx: 6
+                          nonzero_bytes: 0
+                          raw_first32: all zeros
+                          bigint_read: "0"
+```
+
+**[device]** The channel works, the alias is live, and every byte reads back as zero.
+
+**[device]** The channel works, the alias is live, and every byte reads back as zero. The cause
+is the FPU mode the PS5's WebKit runs under: WebProcess heap pointers have the form
+`0x000000100xxxxxxx`, whose exponent field makes the value **denormal** as an IEEE-754 double;
+with denormals-are-zero set the FPU reads `0.0`. The pointer is present in memory and
+unreadable through any float64 lane. The workaround is a width change, not a location change:
+read through `BigUint64Array` or `Uint8Array`, which never enter the FPU.
+
+The enabling condition on the write side is equally specific. `ISO_MALLOC` is **off** in the
+PS5 WebKit build (`OptionsPlayStation.cmake`), which is why engine-written pointers land in
+storage script can subsequently read; had isolation been on, the bidirectional result of §3
+would not have been reachable at all.
+
+
+## 11. What the published WebKit stage does not do here `[already known]`
+
+The Relapse WebKit stage was run against 14.00 as shipped and failed uniformly:
+
+```
+122 / 122 identical failures
+getterCarrier returning 7 is a Number object regardless of leakedScope
+  -> Symbol.prototype.toString.call throws
+structured-clone corruption never lands in the form that makes the wrapper
+   read as a Symbol with oversized length (LEAK_STRING_LENGTH 924176)
+```
+
+**[device]** `evidence/jsc-fingerprint-1400.md`, `evidence/webkit-entry-portability-1400.md`.
+
+**[device]** `evidence/jsc-fingerprint-1400.md`, `evidence/webkit-entry-portability-1400.md`.
+**[device]** `evidence/jsc-fingerprint-1400.md`, `evidence/webkit-entry-portability-1400.md`.
+Plan 4 had the getter return `Symbol("x" × 924168)`: **663 attempts, 663 × `Invalid leaked
+addresses`**. Plan 5 set `copiedLength = 924176`, matching `LEAK_STRING_LENGTH` **by
+construction** (924168 + `Symbol(` + `)`), not by corruption — every captured word was `0x7878`
+widened to `0x7878787878787878`, failing the cell/holder cross-checks at offsets 8 and 12. The
+mechanism itself is intact (a Proxy trap fires on all variants, `trap_calls = 4`); what changed
+is that the bare super-property form no longer passes a receiver — the stock `leak()` bare call
+produced ~150 × "Scope not leaked" at stage 0. The structured-clone corruption the published
+stage depends on does not occur on JSC 14.00: the stage is dead, not misconfigured.
+
+
+## 12. What remains unsolved `[new]`
 
 Stated as a list of things this engagement did **not** establish, because the absence of each
 is load-bearing for anyone continuing the work.
 
-### 6.0 First: which artifact describes which firmware
+### 12.1 First: which artifact describes which firmware
 
 Before the gaps can be read correctly the artifacts have to be sorted, because they do not all
 describe the target: the static analysis was performed on a kernel image that is **not** the
@@ -826,14 +935,14 @@ firmware under test, and the image for the firmware under test does not exist an
 
 **[static]** The BLS fingerprint and the user-agent string were both read directly; the
 mismatch is a property of what was available, not of the analysis. The consequence is a scope
-rule governing every kernel claim in this note: **all** static results — the gate chain of §4.5,
-the CFI-window census of §5.2, the 303 writable OIDs of §5.3, the OID field map of §4.1 and the
-`esi = 241` derivation of §4.4 — describe **firmware 13.60**, offered as a characterisation of
+rule governing every kernel claim in this note: **all** static results — the gate chain of §7.5,
+the CFI-window census of §8.2, the 303 writable OIDs of §8.3, the OID field map of §7.1 and the
+`esi = 241` derivation of §7.4 — describe **firmware 13.60**, offered as a characterisation of
 that kernel and a hypothesis about 14.00, not a description of it. The device results in §3 are
 unaffected: those came off the 14.00 console directly. The reader should assume the kernel-side
 numbers move until a 14.00 image says otherwise.
 
-### 6.1 Two separate gaps, not one
+### 12.2 Two separate gaps, not one
 
 The remaining work is usually described as a single blocker. It is two, and they are
 independent:
@@ -875,7 +984,7 @@ and records "patched" — right conclusion, wrong reason. The correct number is 
 **6.4 CVE-2026-45251 is neither confirmed nor falsified.** The advisory
 (`FreeBSD-SA-26:19.file.asc`, CVSS 3.1 **7.8**) describes a poll/select use-after-free. The
 differential outlier pointing at it was tested with probes that, in most arms, never touched
-their subject (§7.4); the one genuine negative — messageChannel — is weak, because the crash
+their subject (§13.4); the one genuine negative — messageChannel — is weak, because the crash
 oracle is weaker than the predicate under test.
 
 **6.5 The guide WebProcess's Capsicum state is unknown.** Whether it is in capability mode at
@@ -883,11 +992,11 @@ all was never determined, and the gap is not minor: upstream's capability-mode g
 (`CTLFLAG_CAPRD`/`CTLFLAG_CAPWR`) sits in the same check chain as the ANYBODY gate, so a
 capability-mode process may be refused on an entirely different basis.
 
-**6.6 The mechanism is verified on 13.60, not 14.00.** Per §6.0 the swap byte is identical
+**6.6 The mechanism is verified on 13.60, not 14.00.** Per §12.1 the swap byte is identical
 under both base conventions and the surrounding structure is stable on the image we hold, but
 the branch at `0xffffffff9e947f49` has not been re-verified against a 14.00 image because none
 exists; the PUP held is 14.10, its inner layer encrypted against every publicly known key
-(brute-forced, all high entropy). §7.7 proposes routing around this by testing the mechanism
+(brute-forced, all high entropy). §13.7 proposes routing around this by testing the mechanism
 against the live kernel through a syscall channel, without decrypting anything.
 
 **6.7 The floor of static analysis was reached.** On this dump — no symbols, linear disassembly
@@ -895,7 +1004,7 @@ against the live kernel through a syscall channel, without decrypting anything.
 outright, 1 differential outlier left open, and 5 claims retracted. That outlier cannot be
 closed without the console or a `System.map`.
 
-### 6.2 Closed branches: measured absence, not unsearched ground
+### 12.3 Closed branches: measured absence, not unsearched ground
 
 Seven candidate routes to the missing code leak were closed on device: six on the second day,
 and one on the third after upstream's own failure record named the trap.
@@ -913,7 +1022,7 @@ be invalidating all seven at once.
 | Direct read of `libkernel` code for a gadget map | **Closed — that text is execute-only** | Fault as proof of the protection |
 | `ArrayBuffer` spray as the reclaiming object | **Closed — a zeroed spray leaves a null vtable, so every C++ method faults** | Our probe withdrawn against upstream's recorded failure |
 
-**Code-slot via direct read — closed by the fault itself.** Under `xotext` (§3.7) a read of
+**Code-slot via direct read — closed by the fault itself.** Under `xotext` (§9) a read of
 `libkernel` code through the read/write primitive kills the process. That turns our crash
 pattern from a failure into a measurement: **every time a read landed somewhere that could be
 `libkernel` code and the page died, the primitive was working correctly against a protection we
@@ -974,10 +1083,9 @@ fresh `FontFace` with a fresh `@font-face` rule per phase, with a full GC cycle 
 recorded `P2:HIT` three times and `TWO_UAF=YES`. **So "FontFace closed" is true of the shape
 we ran and false as a general statement about second reclaims on 14.10.** We have not tried the
 fresh-face-per-phase shape on 14.00, and their result does not transfer without a run of our own
-— the same rule that governs the deltas in §3.7.3. What the alternative shape does *not*
+— the same rule that governs the deltas in §9.3. What the alternative shape does *not*
 change is the blocker: upstream records that it "gives a heap leak but not R/W or code exec",
 because the reclaimed buffer's absolute address remains unknown.
-
 
 
 **lineDash — a real negative, because the oracle was alive.** The `m_size` field of the dash
@@ -992,7 +1100,7 @@ verdict: NO-REACHABLE-OFFSET
 **[device]** The distinction that makes this worth reporting: the oracle was **live** (the
 baseline read correctly) and the primitive was **working** (`bidirectional: true`), and the
 value did not move. That is a genuine negative about reachability — not the silent-negative
-failure of §7.4, where the probe never touched its subject. A companion run
+failure of §13.4, where the probe never touched its subject. A companion run
 (`linedash-offsetmap-1400`) independently returned `NO-SIZE-SIGNATURE-IN-WINDOW` across an
 `N = 1,2,4,8,16` sweep, so the field was not merely unwritable but unidentifiable in the
 window.
@@ -1058,19 +1166,22 @@ its absence — it narrows where the next attempt should go.
 
 ---
 
-## 7. Methodology
+
+# Part III — Method, related work, conclusion
+
+## 13. Methodology `[new]`
 
 The process is a result of this engagement, so it is recorded at the same level of detail as
 the findings.
 
-### 7.1 A self-driving console harness
+### 13.1 A self-driving console harness
 
 Described in §2.3. The methodological point is the scheduling, not the code: one module per plan
 makes crash isolation a property of the system rather than of the module, and the two-layer
 watchdog means neither a crash nor a hang stops the queue. The engagement ran unattended after
 one page load.
 
-### 7.2 Differential baseline against patched Chromium
+### 13.2 Differential baseline against patched Chromium
 
 Every module runs against patched desktop Chromium (headless, fetch shim on the report channel)
 before it runs against the console. The reading rule:
@@ -1089,7 +1200,7 @@ made all 116 PortalGun modules runnable verbatim, with no per-module porting.
 Across 112 core-driven modules, **zero** reported on patched Chromium the outcome they
 headline as "vulnerable". The baseline holds.
 
-### 7.3 Static analysis without symbols
+### 13.3 Static analysis without symbols
 
 No symbol table, so every identification is arithmetic:
 
@@ -1098,12 +1209,12 @@ No symbol table, so every identification is arithmetic:
 - **Slot-value identity over naming.** `fo_poll @ +0x20` proven by three file-operation tables
   (`0xffffffff9feb7ca0`, `0xffffffffa05e62b0`, `0xffffffffa092f528`) each having **only** slot
   `+0x20` inside the validated window `[0xffffffff9e65b760 .. 0xffffffff9e65b7d8]`.
-- **CFG entry counts as proof of unreachability.** The §4.5 check block has exactly one incoming
+- **CFG entry counts as proof of unreachability.** The §7.5 check block has exactly one incoming
   edge: "I did not see it reached" becomes "it cannot be reached".
 - **BFS from the syscall entry.** `__sysctl 9e9481e0 → 9e947d90 → 9e9486f0 → call r15`, with
   `__sysctl` holding **zero** indirect calls across 280 instructions.
 
-### 7.4 Vacuous negatives
+### 13.4 Vacuous negatives
 
 The most transferable lesson from the live run.
 
@@ -1136,7 +1247,7 @@ patch state. Two-direction verification fixed it: patched Chromium with the real
 same type) → `ok:true`/`same:false`/proceeds to B ✓. **A gate must be run against a
 known-negative before it is trusted on an unknown.**
 
-### 7.5 Retractions
+### 13.5 Retractions
 
 Five claims were retracted during the engagement. They are listed because each retraction
 taught something the surviving findings did not.
@@ -1146,7 +1257,7 @@ taught something the surviving findings did not.
    Pointers landed on non-OID data — one hop yielded `0x20786c25006b636f`, ASCII fragments.
    *The layout is right; the traversal is not.* **An analogy that was not executed is not
    evidence.**
-2. **The amplifier.** Falsified in §5.4: dispatch is by function pointer, not by type
+2. **The amplifier.** Falsified in §8.4: dispatch is by function pointer, not by type
    field.
 3. **The kind-swap abandonment.** An earlier note concluded that nothing on the `sysctl(2)` path
    reads `oid_kind` — 1,773 `[reg+0x14]` reads in TEXT across 955 functions, **0 of 16** readers
@@ -1169,7 +1280,7 @@ capstone (this silently broke a TEXT bound and produced `call_targets = 0`; mask
 the static-file formula outside its domain — live runtime pointers carry the modern FreeBSD 13+
 KVA prefix `0xffff8e77…`, to which `VA - 0xffffffff9e3f0000` returns nonsense.
 
-### 7.6 CVE existence by direct query
+### 13.6 CVE existence by direct query
 
 Two CVEs in this note were verified against NVD directly
 (`services.nvd.nist.gov/rest/json/cves/2.0`) after a search engine returned nothing for one
@@ -1223,7 +1334,7 @@ not an error; it is a wrong answer. `SYSCTL_NR = 199` is correct for the native 
 was cross-checked three ways: the PoC's own constant, `sysent-13.60.md`, and an independent
 scan resolving `idx 199 → 0xffffffff9e655a60`.
 
-### 7.7 Fuzzing the live kernel from the browser (proposed, not executed)
+### 13.7 Fuzzing the live kernel from the browser (proposed, not executed)
 
 Upstream's variant analysis closes with a wish: a *"baseline for diffing once someone gains any
 14.x read access"* — a chicken-and-egg, since the read access is what the baseline is for. The
@@ -1233,18 +1344,18 @@ chain built here breaks the loop from the other side:
 code leak -> syscall dal WebProcess -> fuzz syscall 14.00 -> bug kernel
 ```
 
-With the ROP frame of §3.6 already reaching six controlled arguments and `sysctl` proven
-reachable at 199 (§7.6), the live 14.00 kernel becomes fuzzable **from the browser**, without
+With the ROP frame of §6 already reaching six controlled arguments and `sysctl` proven
+reachable at 199 (§13.6), the live 14.00 kernel becomes fuzzable **from the browser**, without
 the image and without a prior kernel primitive. The syscall surface is the fuzz target; the
-crash oracle is the page dying and the synchronous beacon (§7.8) recording exactly where.
+crash oracle is the page dying and the synchronous beacon (§13.8) recording exactly where.
 
 Two caveats, so this is not mistaken for a result: **nothing here was executed** — the chain's
-first link is the same missing code leak of §6.1 — and it is **a route to a bug, not a bug**:
+first link is the same missing code leak of §12.2 — and it is **a route to a bug, not a bug**:
 the guide WebProcess may be too constrained for the interesting call classes, and the crash
-oracle available from the browser is the same weak oracle discussed in §7.4. It is recorded
+oracle available from the browser is the same weak oracle discussed in §13.4. It is recorded
 because a dead end mapped is more useful to the next reader than one omitted.
 
-### 7.8 The patcher that did not patch: a silent false negative at scale
+### 13.8 The patcher that did not patch: a silent false negative at scale
 
 The most consequential defect found in this engagement was not in the target. It was in our own
 automation, and it was invisible for most of the engagement's lifetime.
@@ -1310,7 +1421,7 @@ reports *what it intended*, and unless the output is independently counted again
 **Why the synchronous XHR was worth the trouble anyway.** With asynchronous `fetch`, a run
 that crashed the page left **nothing** behind — the beacon was still queued when the renderer
 died. With the synchronous transport, every run delivers the **exact point of death**. That is
-directly why the FontFace branch in §6.2 could be localised to `document.fonts.load()` at all:
+directly why the FontFace branch in §12.3 could be localised to `document.fonts.load()` at all:
 without the synchronous beacon, those fifteen runs would have been fifteen silences, and the
 branch would still be open and unexplained.
 
@@ -1343,7 +1454,7 @@ would have been written off on an artifact.
 
 **A third instance, and the most instructive: a crash read as a broken primitive.** For most of
 the engagement a page dying on a read looked like the primitive failing under some alignment or
-permission edge. Under `xotext` (§3.7) the reading inverts: **the primitive was working
+permission edge. Under `xotext` (§9) the reading inverts: **the primitive was working
 correctly against a protection we did not know was present.** The crash was information, not
 noise — it was telling us the address was code and code is not readable. We had the signal the
 whole time and had filed it under failures. **[hypothesis]** — the inversion is a re-reading of our own crash log through a mechanism established upstream on `libkernel`; we have not attributed individual crashes to it.
@@ -1378,12 +1489,13 @@ happened, and an empty array is indistinguishable from a scan that found nothing
 
 ---
 
-## 8. Related work and novelty survey
+
+## 14. Related work and novelty survey `[already known]`
 
 The survey was run against primary sources — GitHub's API and raw file endpoints — rather
-than a search engine, for the reason given in §7.6.
+than a search engine, for the reason given in §13.6.
 
-### 8.1 The community 14.10 corpus
+### 14.1 The community 14.10 corpus
 
 `ZigZagBoi1/PS5-14.10-Research` is the largest body of work in this area: an active community
 effort with **2,901 probes, 3,245 captures and 155 merged PRs** at clone time (315 MB, 9,005
@@ -1404,17 +1516,17 @@ handlers entirely (`sys 598`, `sys 612/649`, RDMSR, `PRIV_NETINET_SETHDROPTS`). 
 own sysctl write attempts on 14.10 all returned `-1`, and its own audit re-classifies them
 honestly as "one failed write attempt, not a survey proving all sysctl writes blocked".
 
-### 8.2 Relapse
+### 14.2 Relapse
 
 Relapse is the published exploit whose WebKit stage this engagement attempted to port. Its
-`syscall_map` is the origin of the "sysctl = 202" error (§7.6); its kernel stage stops at 13.60;
-its WebKit stage is dead on 14.00 for the reason established in §3.5. Its `wk_gadgetmap` did
-settle the `pop r8` / `pop r9` question for the browser path (§3.6).
+`syscall_map` is the origin of the "sysctl = 202" error (§13.6); its kernel stage stops at 13.60;
+its WebKit stage is dead on 14.00 for the reason established in §11. Its `wk_gadgetmap` did
+settle the `pop r8` / `pop r9` question for the browser path (§6).
 
-### 8.3 Upstream FreeBSD
+### 14.3 Upstream FreeBSD
 
 Upstream `sys/kern/kern_sysctl.c`, `sys/sys/sysctl.h` and `sys/sys/priv.h` were the naming
-reference for §4.4: the PS5 gate order matches upstream `sysctl_root()` (writable, securelevel,
+reference for §7.4: the PS5 gate order matches upstream `sysctl_root()` (writable, securelevel,
 ANYBODY/privilege, handler, MAC), and the selector constants match (`0x04000000` =
 `CTLFLAG_PRISON`, derived `esi` 241/242 = `PRIV_SYSCTL_WRITE`/`PRIV_SYSCTL_WRITEJAIL`). But the
 bit values verified **structurally** on the PS5 dump are `0x40000000`, `0x08000000`,
@@ -1422,7 +1534,7 @@ bit values verified **structurally** on the PS5 dump are `0x40000000`, `0x080000
 convention assumption. The PS5 kernel is a Sony-modified fork; the numbering was not
 independently enumerated on the PS5 side.
 
-### 8.4 Novelty verdict
+### 14.4 Novelty verdict
 
 **No prior art found that documents the kind-swap mechanism at branch level.**
 
@@ -1446,14 +1558,14 @@ What is **not** prior art, and is contributed here:
    wrong offset (`+0x14` not `+0x1c`).
 5. The `ntfusion` iterator confusion on 14.00 as a second orthogonal WebKit confusion, scoped
    to **reachability of the confusion path** — not an obtained read/write object.
-6. The six closed code-leak branches of §6.2, each closed by a **different** evidence class so
+6. The six closed code-leak branches of §12.3, each closed by a **different** evidence class so
    the set has no shared failure mode — including running upstream's `p563` verbatim to remove
    interpretation as a variable, and a write-channel round-trip that measures where FTZ lives
    instead of inferring it from a null scan.
-7. The silent-false-negative case study of §7.8 — a methodological result about automated
+7. The silent-false-negative case study of §13.8 — a methodological result about automated
    exploit development, not about the PS5.
 8. The `xotext` constraint on `libkernel_web` established, and the resulting reframe of the code
-   leak from *reading code* to *reading data that contains code addresses* (§3.7) — including
+   leak from *reading code* to *reading data that contains code addresses* (§9) — including
    the field-by-field delta stability table showing the deltas are a property of a build family,
    not of the module, and that `thread_list` moves even within 12.xx.
 
@@ -1464,7 +1576,8 @@ precisely is more useful than a larger thing assumed.
 
 ---
 
-## 9. Conclusion
+
+## 15. Conclusion `[new]`
 
 Two things were established and one was corrected.
 
@@ -1474,24 +1587,25 @@ heap-pointer disclosure, and a ROP frame reaching six controlled system-call arg
 bounded by a sandbox that refuses workers with `SecurityError` and has no `SharedArrayBuffer`.
 
 What is missing has not changed, and it is **two gaps, not one**: a WebKit **code leak** is
-missing, and a **kernel bug** yielding read/write has not been found — and per §6.1 finding the
+missing, and a **kernel bug** yielding read/write has not been found — and per §12.2 finding the
 leak will not supply one. One caveat travels with every kernel number here: the image analysed is
-**13.60** and no 14.00 image exists (§6.0), so the device results stand on their own while the
+**13.60** and no 14.00 image exists (§12.1), so the device results stand on their own while the
 kernel characterisation remains a hypothesis. With a code leak in hand the 14.00 kernel can be
-**fuzzed live from the browser** (§7.7), routing around the missing image entirely — a
+**fuzzed live from the browser** (§13.7), routing around the missing image entirely — a
 proposal, not a result.
 
 The most useful product may be neither finding but the discipline behind them: run the gate
 against a known negative before trusting it on an unknown; treat a probe that never touched its
 subject as having said nothing; and when a null result shows up, check the offset before
-concluding the tool has a limit. The six closed branches of §6.2 are worth what they are only
+concluding the tool has a limit. The six closed branches of §12.3 are worth what they are only
 because each was closed by a **different** kind of evidence — and the largest defect found here
 was in the engagement's own automation, where a helper missing one `return` quietly broke 125 of
-146 probes while they kept reporting normally (§7.8). Automated exploit development reports
+146 probes while they kept reporting normally (§13.8). Automated exploit development reports
 what it *intended*; unless output is counted against input, a patch that changed nothing and a
 patch that changed everything both exit zero.
 
 ---
+
 
 ## References
 
@@ -1527,7 +1641,7 @@ patch that changed everything both exit zero.
   - `docs/PROJECT_HANDOFF.md` §9.2 — the `xotext` constraint and the parked-stack delta method.
   - `tools/lkfind.js` — signature scanner, method-validated 6/6 against a synthetic image.
   - `tools/lkfind.js` `EXPECT` table — the per-firmware delta values behind the
-    field-by-field stability table in §3.7.3.
+    field-by-field stability table in §9.3.
 - `ZigZagBoi1/PS5-14.10-Research` — community 14.10 research corpus (2,901 probes,
   3,245 captures, 155 merged PRs).
   <https://github.com/ZigZagBoi1/PS5-14.10-Research>
@@ -1552,15 +1666,15 @@ patch that changed everything both exit zero.
 **Engagement evidence (host: `ai-srv:/opt/AGENTS/Ares/engagements/ps5-1400-kernel/`)**
 
 ```
-ARTIFACT_VERSION_WARNING.md                 <- the 13.60 / 14.10 / 14.00 artifact table (§6.0)
-kernel-hunt/syncxhr-and-ptrscan-14.00.md    <- sync XHR + pointer scan (§6.2, §7.8)
-kernel-hunt/linedash-offsetmap-stage1-14.00.md  <- lineDash differential method (§6.2)
-kernel-hunt/sysent-13.60.md                 <- native syscall table, __sysctl @ 199 (§7.6)
+ARTIFACT_VERSION_WARNING.md                 <- the 13.60 / 14.10 / 14.00 artifact table (§12.1)
+kernel-hunt/syncxhr-and-ptrscan-14.00.md    <- sync XHR + pointer scan (§12.3, §13.8)
+kernel-hunt/linedash-offsetmap-stage1-14.00.md  <- lineDash differential method (§12.3)
+kernel-hunt/sysent-13.60.md                 <- native syscall table, __sysctl @ 199 (§13.6)
 kernel-hunt/suser-enabled-target-14.00.md
 kernel-hunt/write-primitive-14.00.md
 probe/probe_log.jsonl                       <- raw device log, all runs cited above
 probe/pg_tests.json.pre-syncxhr.bak         <- pre-sync-XHR corpus generation
-probe/pg_tests.json.pre-postfix.bak         <- the 125-broken-module generation (§7.8)
+probe/pg_tests.json.pre-postfix.bak         <- the 125-broken-module generation (§13.8)
 evidence/ondevice_1400_confirmed.md
 evidence/kind_swap_mechanism_verified.md
 evidence/kind-swap-abandoned-and-core-baseline.md
@@ -1597,3 +1711,5 @@ evidence/l1-blocked.md
 kernel/kernel-13.60-live.bin
 CONSOLE_RUNBOOK.md
 ```
+
+
