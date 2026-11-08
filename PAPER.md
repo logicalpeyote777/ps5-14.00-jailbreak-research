@@ -2754,7 +2754,131 @@ work.
 ---
 
 
-## 15. Conclusion `[new]`
+## 15. The pivot: a foothold that does not run through the browser `[new]`
+
+**The browser chain is still standing and still does not produce kernel read/write.** Everything
+established about it in Part I holds: the User's Guide entry works, the WebKit stage is reachable,
+the scope leak and the gate behaviour are measured. What it does not yield is the primitive the
+kernel half needs. **The bottleneck is a single one: there is no byte-addressable view of the
+butterfly.** Structured-clone spray lands floats rather than pointers, so the address-of step has
+nothing to read through; the ROP path is stopped by a Capsicum `SecurityError` and by the absence
+of a 14.00 `libkernel_web` to call into. **A live route that cannot reach kernel memory is a
+route that has not arrived.**
+
+**The route taken instead enters through a game save.** The chain, verified in the payload code
+rather than inferred from a description:
+
+```
+savegame -> arbitrary Lua -> jitshm_create(0x7) + mmap PROT_RWX
+         -> elf_loader.lua (native ELF) -> dlsym -> userland r/w
+         -> ipv6_kernel_rw -> kernel r/w
+```
+
+**Each link was read where it is implemented.** `syscall.jitshm_create(0, sz, 0x7)` at
+`elf_loader.lua:109` gives an executable shared mapping; `jitshm_alias(h, 0x3)` at `:112` gives a
+writable alias; `mmap(..., PROT_RWX, ...)` at `:119` gives the executable mapping itself;
+`dlsym(0x2001, "getpid")` at `:184` resolves symbols inside the running process. **The control
+channel is TCP: the loader opens a listening socket and Lua is pushed to it from a workstation, so
+once the loader runs the console is commanded over the network rather than through the console.**
+
+**The vector is Raspberry Cube, `CUSA16074`, on the Artemis visual-novel engine.** The save
+exploit that opens the door is gezine's `ArtemisLuaLoader`, whose stated capability is *"Run
+arbitrary lua script from savedata"*; the loader built on top of it is n0llptr's
+`remote_lua_loader`, described there as *"not firmware dependant, tested on PS5 Pro 10.40"*.
+**Eighteen Artemis titles are supported by that loader; Raspberry Cube is one of them.**
+
+**The property that makes this route worth switching to is stated cleanly in the code.** The foothold
+is the engine reading a Lua file out of the save and executing it. **That is engine behaviour, not
+kernel behaviour, and there is no firmware offset anywhere in the foothold.** The firmware
+dependency sits downstream, in the kernel read/write step. **A foothold that does not age with the
+firmware is a different class of asset from one that needs re-deriving per release.**
+
+**The save is built on a PC, without a jailbroken PS4.** The published setup for this loader runs
+its content-injection steps on a jailbroken PS4 through Apollo Save Tool. **That requirement is
+replaced here with a PC-side build using `mkpfs` 1.1.0 from PSBrew, packing with a zero EKPFS key
+under `--signed --encrypted`.** The reason this can work is the binding model: **the save is bound
+to the PSN account, not to the device.** The published flow itself demonstrates it, by asking the
+user to read the PSN account id off the PS5, convert it to hex, and fake-activate a PS4 account
+under that id. **If the signature required a device key, fake activation would not exist.** The
+console's zero-key fallback covers the cross-console case.
+
+**Two risks were carried into this and both were closed offline rather than assumed.**
+
+**R1, sealed key versus zero key:** closed by the account-binding finding above plus the console's
+zero-key fallback. **The strongest single piece of evidence is that a working encrypted save is
+shipped as a downloadable file by the loader's own author.** If the encryption were device-bound,
+publishing one file usable by everyone would be meaningless.
+
+**R2, size mismatch:** resolved with two variants. **V-pad** at 3200 blocks carrying the original
+`param.sfo`, and **V-adjust** at 47 blocks with a patched `param.sfo`. **A real bug was found in
+the first and repaired.** The original V-pad was signed at 47 blocks and then padded to 100 MB
+afterwards, which broke the signature: appending 98 MB past the point of signing moves the content
+relative to the recorded digests, producing `header signature region digest mismatch`. **Padding
+has to happen at pack time, not after the fact.** Since `mkpfs` exposes no target-size option, the
+image must be born at 3200 blocks, which was done by adding an incompressible padding file so the
+pack fills the image naturally. **Random bytes rather than zeros, because a zero-filled pad
+compresses to almost nothing and the image would not grow.** Calibrated to the exact target:
+103 137 856 bytes of padding yields 3200 blocks, `block_count × block_size == size`, zero errors.
+**Both variants now verify under the zero key: 6 of 6 critical files, zero signature errors.**
+
+**A tool defect surfaced during that verification, and it inverted into a proof.** Verifying the
+larger image crashed `mkpfs` with `UnboundLocalError: cannot access local variable 'records'`,
+because in `verify_signed_image_signatures` the `records` variable is assigned only inside the
+mismatch branch. **When the signature verifies, `records` is never assigned and the following loop
+crashes. The crash was therefore evidence that the signature was correct.** Initialising
+`records = []` before the branch lets the full tree read clean. **The smaller V-adjust never
+reaches the bug because its files all live in direct blocks.**
+
+**Track record, and where 14.00 sits in it.** The loader ships two distinct levels of capability
+and they have different ceilings. **Arbitrary Lua execution is proven and firmware-independent.**
+**A full jailbreak launched from that Lua channel is documented up to PS5 12.70**, where the user
+gets debug settings, homebrew and BD-J unpatch, with a kernel panic on game close still open as a
+known defect at the time. **PS5 13.60 is still an open request**, filed 2026-09-29 as issue #154
+asking whether the loader would be updated for it. **For 14.00: zero issues, zero commits, zero
+release notes. Nobody has named it, let alone reached it.** **If the foothold runs on 14.00, that is
+a first.**
+
+**The honest boundary on the last step.** The kernel primitive is real, well understood, and gives
+arbitrary read and write: `IPV6_PKTINFO` handled through a master/worker socket pair, with
+`kread20` and `kwrite20` in `lapse.lua:1557-1567` and the amplification to unbounded length
+through a pipe pair in `kernel.lua:166+`. **It is not read-only; it writes.** **What is not
+established is coverage of 14.00.** The offset tables the loader carries stop well short of the
+target: the PS5 list tops out at 10.01 and the PS4 list at 12.02, with no 13.xx and no 14.xx
+entry in either. **The kernel patches bundled in the loader are PS4-only, and there is no PS5 14.00
+patch present.** Whether Sony patched the underlying `ip6_pktopts` behaviour in 14.00 cannot be
+settled offline, because settling it requires the same L1 decryption that blocks everything else
+in this note. **"The code is present in the loader" is not the same statement as "it works on
+14.00", and the gap between those two is exactly what the device test is for.** The loader does
+carry runtime offset discovery alongside the static tables, which is the mechanism by which the
+gap might close without a hand-authored entry.
+
+**Current state.** Two saves are built and verified on disk. **Test 1** carries the foothold and is
+expected to report Lua injection success. **Test 2** carries the complete loader: `inject.iet`
+pointing at an absolute `/savedata0/main.lua`, `main.lua` opening the TCP listener, `kernel.lua`
+with `ipv6_kernel_rw`, `kernel_offset.lua` with the tables and the runtime discovery, and
+`ps5-kexp.bin` as the PS5 kernel exploit. **The switch from the demo chain to the loader chain is
+in the `inject.iet`: the original calls `inject.lua` by relative path and then three demo
+functions; the loader version includes `/savedata0/main.lua` by absolute path and nothing else,
+handing control to the loader.** **Both are pending on the device.**
+
+**The proof criterion for the kernel step is explicit, because a weak check here would be worse
+than no check.** **Read is proven by walking the `allproc` list and printing at least three
+`p_comm` strings with their addresses.** Those strings exist nowhere in user memory, so reading
+them is not a self-inflicted echo. **Write is proven by a full round-trip against `DATA_CAVE`, the
+kernel data scratch area: write, read back, restore.** **A flag reporting that read/write is
+available, without the round-trip, is not proof.**
+
+**What this changes about the shape of the work.** The browser chain remains documented as the
+secondary path, with everything measured about it intact. **The primary route is now one where the
+foothold is engine behaviour rather than an engine vulnerability, where the save is built on a PC
+rather than on a jailbroken console, and where the open question is narrowed to a single
+primitive's coverage of one firmware.** That is a smaller unknown than the one the browser chain
+ended on.
+
+---
+
+
+## 16. Conclusion `[new]`
 
 Two things were established and one was corrected.
 
