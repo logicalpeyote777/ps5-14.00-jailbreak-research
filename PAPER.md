@@ -206,6 +206,45 @@ their probe `p553` on 2026-10-26, with the writable surface being the 6×float64
 matrix plus seven numeric properties over the 768-byte context. **14.00 (2026-09-16) predates
 14.10 (2026-10-01), so the finding transfers** **[upstream]**.
 
+**Provenance of the CVE, queried directly rather than summarised.** The record below is the
+NVD response for this identifier, fetched from
+`services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-43720` (HTTP 200, 3 970 bytes):
+
+```
+id           : CVE-2026-43720
+vulnStatus   : Modified
+published    : 2026-06-29T20:17:36.553
+lastModified : 2026-08-17T22:17:08.137
+
+desc (en)    : "A use-after-free issue was addressed with improved memory
+               management. This issue is fixed in Safari 26.5.2, iOS 18.7.10
+               and iPadOS 18.7.10, iOS 26.5.2 and iPadOS 26.5.2, macOS Tahoe
+               26.5.2, tvOS 26.6, visionOS 26.6, watchOS 26.6. Processing
+               maliciously crafted web content may lead to an unexpected
+               Safari crash."
+
+cvss         : 6.5   CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H
+
+references (7):
+  https://support.apple.com/en-us/127594
+  https://support.apple.com/en-us/127595
+  https://support.apple.com/en-us/127685
+  https://support.apple.com/en-us/128068
+  https://support.apple.com/en-us/128069
+  https://support.apple.com/en-us/128070
+  https://support.apple.com/en-us/148287
+```
+
+**[upstream]** NVD classifies this as a **use-after-free** in web content processing, fixed in
+**Safari 26.5.2**, published **2026-06-29**. The availability vector is availability-only
+(`C:N/I:N/A:H`), which matches the stated symptom of an unexpected crash and is worth noting
+against the fact that the same primitive, in other hands, is a read/write primitive: the vendor
+record describes the crash, not the exploitable surface.
+
+**This is the rule of §13.6 applied to its own subject.** NVD was queried directly rather than
+reached through a search engine, and the record is reproduced here so the claim about it can be
+checked against the thing it is about.
+
 What was not known before this engagement, and what we measured, is whether the bug is *live and
 usable* on 14.00 specifically, as opposed to present in the source and unreachable in the
 build. That is a different question and it needed a device.
@@ -1140,10 +1179,12 @@ closed without the console or a `System.map`.
 ### 12.3 Closed branches: measured absence, not unsearched ground
 
 Seven candidate routes to the missing code leak were closed on device: six on the second day,
-and one on the third after upstream's own failure record named the trap.
+and one on the third after upstream's own failure record named the trap. Three further routes
+were closed on the fourth day and are treated separately in §12.4 and §12.5, for a total of
+ten.
 They are reported together because the point is not the list: it is that each was closed with
 a **different class of evidence**, so the set does not share a single failure mode that could
-be invalidating all seven at once.
+be invalidating all of them at once.
 
 | Branch | Verdict | Evidence class |
 |---|---|---|
@@ -1378,6 +1419,125 @@ the `+0x18` chase, then the WebKit base. `history.state` is available and unused
 which is an open road rather than a result.
 
 
+### 12.5 Typed interfaces return their own type, not the memory beneath
+
+Two probes were run against the same question from opposite directions: what does the canvas
+window actually expose? Both answer the same way, and the answer is structural.
+
+**Reversing the reclaim order changes nothing.** `header-alias-1400` inverts the usual
+arrangement: instead of spraying canvas over a freed object, it frees JSObjects and sprays
+canvas contexts on top, so the alias should land on a JSObject header if the window is a
+memory window.
+
+```
+victims: 24 JSObject freed
+spray:   120 canvas contexts sprayed over
+classes: {"float-like": 720}
+found_n: 0
+VERDICT: ALL-FLOAT-NO-HEADER
+```
+
+**[device]** 720 words classified across four classes (SID-LIKE, HEAP-HI, PTR-IN-HIGH,
+PTR-IN-LOW) plus float-like: **100% float-like, zero JSObject headers under the alias.**
+
+**The window the canvas UAF exposes is a set of float-valued properties as evaluated through
+the WebIDL interface, not a window onto the object's memory.** Placement does not determine
+what the alias reads; the interface does. Reversing the reclaim order cannot surface a header
+because the alias never addresses the header in the first place.
+
+**The byte view is asymmetric rather than absent.** `imagedata-byteview-1400` asks whether
+`ImageData` gives a dual view, bytes and doubles over the same memory:
+
+```
+ctor_ok:     true          new ImageData(8,8) works
+is_clamped:  true          .data is Uint8ClampedArray
+len:         256           8*8*4
+has_buffer:  true          .buffer exists
+f64_len:     32            Float64Array view = 32 elements
+
+changed:     false    before: 0    after: 0     <-- byte -> double: does not work
+write_d_read_b: "000000000000f03f"            <-- double -> byte: works
+dual_view:   false
+outcome:     NO-DUAL-VIEW
+```
+
+**[device]** `000000000000f03f` is the exact little-endian pattern of the double `1.0`.
+**Writing a DOUBLE and reading BYTE works. Writing a BYTE through `.data` and reading DOUBLE
+does not.**
+
+**The `Float64Array` view over `.buffer` is real and coherent: what the double lane writes, the
+byte lane reflects.** What does not reach that memory is a write issued through `ImageData.data`.
+**`.buffer` is a stable alias; `.data` is not.** A byte write through `.data` lands somewhere
+that the double view of `.buffer` never sees, which is what a per-access copy or a freshly
+constructed view looks like from the outside.
+
+**Three independent probes, one principle.**
+
+| Probe | Observed |
+|---|---|
+| `vector-hijack` (§12.4) | float setters, no crash on an address-shaped write |
+| `ssv-addrof` spray | `0x4058…` ≈ 98.8, not pointers |
+| `header-alias` | 720/720 float-like |
+
+**Everywhere an engine object was looked into through a typed interface, what came back was the
+type of the interface, not the memory underneath.** This is the most useful negative in the
+note: three independent lines of evidence that the canvas UAF is not a route to the leak, and
+that a different class of bug is required rather than a better offset.
+
+
+### 12.6 The ROP prerequisite list collapses from four to two
+
+Four items are commonly listed as prerequisites for the ROP stage. Two of them are not
+independent problems.
+
+**`pop_rsp` is not fatal: its absence is a designed negative control.** No `libkernel_web`
+binary exists in our possession for any firmware version (zero files; no `.sprx`, no `.prx`),
+so the check cannot be a byte search against our own artifact. What the tooling says instead:
+
+```
+tools_lkfind.js:18-19
+  "pop_rsp : 5c c3 (REMOVED in 12.xx -> count 0;
+                    the adapter takes WebKit's pop rsp instead)"
+
+tools_lkfind.js:171-176
+  "pop_rsp is the negative control: its ABSENCE is the proof you are
+   looking at 12.xx+ rather than a 10.00-era module, and the adapter must
+   therefore take WebKit's pop rsp."
+  if (pop.hits === 0) console.log("[ok]  pop_rsp absent -- expected on 12.xx+
+                                  (use W.gadgets.pop_rsp from WebKit)")
+```
+
+**`[ok]`, not `[fail]`.** The absence is the expected and correct result. The capability is
+not lost; it moved out of `libkernel_web` and is supplied as an absolute address by the host:
+
+```js
+// rop-worker.js:113-118
+// pop_rsp: prefer a caller-supplied absolute (webkit) address --
+// libkernel_web dropped `5C C3` in 12.xx, so kbase+LK_POP_RSP is invalid there.
+if (name === "pop_rsp" && W.gadgets && W.gadgets.pop_rsp !== undefined)
+    return BigInt(W.gadgets.pop_rsp);
+```
+
+**An absent gadget in a pattern is not an absent capability.** The adapter takes WebKit's `pop
+rsp` as an absolute address rather than searching for an equivalent byte pattern.
+
+**The EXPECT table does not reach 14.00.** `tools_lkfind.js` carries `pop_rsp: 0x343AA` for
+10.00 and `null` for 12.00/12.40, with aliases only across 12.02/12.20/12.60/12.70.
+`grep -cE '"1[34]\.'` over the table returns **0**: no 13.x entry and no 14.x entry exists,
+so for 14.00 there is no expected value to compare against.
+
+| Prerequisite | Reduces to |
+|---|---|
+| worker | Capsicum block → alternative: a WebKit-internal thread already blocked in kernel |
+| `thread_list` | L1 decryption |
+| `worker_wait_return` | L1 decryption |
+| `pop_rsp` | **WebKit base leak** |
+
+**Induction declared where it applies.** `5c c3` absent in 12.xx is **measured**. Absent in
+14.00 is **induced by family**, since no 14.00 `libkernel_web` binary is in our possession
+(§9.3). The two are stated separately rather than merged into one claim.
+
+
 ---
 
 
@@ -1502,6 +1662,11 @@ of them. The search engine was wrong.
 
 > **For CVE existence, query NVD or MITRE directly. A search engine's null result is not
 > evidence of non-existence.**
+
+The rule is applied to its own subject in §3.1, where the full NVD record for
+`CVE-2026-43720` is reproduced rather than paraphrased: published `2026-06-29`, last modified
+`2026-08-17`, a use-after-free in web content processing fixed in Safari 26.5.2, CVSS 6.5
+`AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H`, and seven Apple references.
 
 The same discipline produced the syscall-number correction. The community's "sysctl = 202"
 traces to a `syscall_map` with 331 entries in which 199 is absent and 202 is present:

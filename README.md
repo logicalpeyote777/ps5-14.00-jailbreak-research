@@ -51,8 +51,15 @@ reach is an address:** it reads and writes a window it cannot locate.
 2. **No kernel bug yielding read/write has been found.** The kind swap is a permission bypass,
    not a memory-safety violation, so finding the leak does not hand over the kernel bug.
 
-Seven candidate routes to the leak were closed on device, each with a **different class of
-evidence**, so the set does not share one failure mode that could invalidate all seven.
+Ten candidate routes to the leak were closed on device, each with a **different class of
+evidence**, so the set does not share one failure mode that could invalidate all of them.
+
+**The most useful of the negatives:** everywhere an engine object was looked into through a
+typed interface, what came back was the type of the interface, not the memory underneath.
+Three independent probes say it: float setters survive an address-shaped write, an address
+spray reads back as ≈98.8 rather than as pointers, and a reversed reclaim returns 720 of 720
+float-like words with zero object headers under the alias. **The canvas UAF is not a route to
+the leak. It needs a different class of bug, not a better offset.**
 
 ## Kernel-side: the 14.00 artifact is in hand, the kernel image is not
 
