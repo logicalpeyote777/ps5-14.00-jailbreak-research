@@ -54,6 +54,13 @@ reach is an address:** it reads and writes a window it cannot locate.
 Ten candidate routes to the leak were closed on device, each with a **different class of
 evidence**, so the set does not share one failure mode that could invalidate all of them.
 
+**The gap is not ours alone.** On 4 November 2026 Jose Coixao, the author of Prolapse, the
+most prominent jailbreak candidate aimed at this firmware range, stated publicly that the AIO
+memory his exploit needs cannot be corrupted here: *"for now i think we are currently out of
+luck for ps5 on 14.00 and 14.10."* He names two other developers who reached the same
+conclusion, and says he agrees with them. **The candidate that was expected to carry 14.00 is,
+by its own author's account, stopped at the same wall this note describes.**
+
 **The most useful of the negatives:** everywhere an engine object was looked into through a
 typed interface, what came back was the type of the interface, not the memory underneath.
 Three independent probes say it: float setters survive an address-shaped write, an address
