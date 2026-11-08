@@ -1922,6 +1922,84 @@ behaviour. Retested at the real value, <code>CARRIER_SLOTS = 9000000</code>, 72 
  {&quot;label&quot;:&quot;carrier-length&quot;,&quot;cls&quot;:&quot;0&quot;}]
 </code></pre>
 <p><strong>Nine million slots change nothing.</strong></p>
+<p><strong>The gate reads the internal type, not the label.</strong> Ten forms were put through
+<code>Symbol.prototype.toString</code> on the local JSC to map exactly what it admits:</p>
+<table>
+<thead>
+<tr>
+<th>Form</th>
+<th><code>Object.prototype.toString</code></th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Symbol('AAA')</code></td>
+<td><code>[object Symbol]</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><code>Object(Symbol('BBB'))</code></td>
+<td><code>[object Symbol]</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><code>Symbol.for('CCC')</code></td>
+<td><code>[object Symbol]</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><code>Symbol.iterator</code></td>
+<td><code>[object Symbol]</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>getter returning a raw Symbol</td>
+<td><code>[object Symbol]</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>getter returning a wrapped Symbol</td>
+<td><code>[object Symbol]</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><code>Object(7)</code></td>
+<td><code>[object Number]</code></td>
+<td>throws</td>
+</tr>
+<tr>
+<td><code>Object(7)</code> with <code>Symbol.toStringTag = "Symbol"</code></td>
+<td><strong><code>[object Symbol]</code></strong></td>
+<td><strong>throws</strong></td>
+</tr>
+<tr>
+<td>Proxy with <code>toStringTag</code> returning <code>"Symbol"</code></td>
+<td><strong><code>[object Symbol]</code></strong></td>
+<td><strong>throws</strong></td>
+</tr>
+<tr>
+<td>Proxy of a real Symbol</td>
+<td>tag read itself errors</td>
+<td>throws</td>
+</tr>
+</tbody>
+</table>
+<p><strong>[static]</strong> Run against <code>libjavascriptcoregtk-4.1.so.0</code> through the ctypes testbed (§13.9);
+six forms pass, four throw.</p>
+<p><strong>Six forms pass and every one of them is a real Symbol. Two forms present as <code>[object Symbol]</code>
+and still throw.</strong> A Number wearing <code>Symbol.toStringTag</code> looks like a Symbol to
+<code>Object.prototype.toString</code> and is refused anyway; a Proxy that reports <code>"Symbol"</code> for the tag is
+refused; a Proxy wrapping a real Symbol does not even produce a tag. <strong>The gate does not consult
+<code>toStringTag</code>. It consults the internal type, and only a real Symbol passes.</strong></p>
+<p><strong>That excludes a whole class of solutions at once: the carrier cannot fake being a Symbol.</strong> It
+cannot fake it with a tag and it cannot fake it with a Proxy. <strong>Whatever gets through has to be a
+real Symbol.</strong> But <code>core.js</code> says <code>getterCarrier</code> returns <code>7</code>, a Number. <strong>The contradiction
+tightens: either 13.60 had no such check, or the carrier turns the getter's value into a real
+Symbol, and the code says 7.</strong></p>
+<p><strong>The prediction gains a structural reason.</strong> It is not that the carrier fails to work; it is
+that the carrier cannot pretend. <strong>If a value passes a gate that refuses every forgery, it passes
+because the gate was not there.</strong></p>
 <p><strong>The contradiction this leaves, and its weight.</strong> The assignment chain in <code>core.js</code> is linear:</p>
 <pre><code class="language-js">getterCarrier = function getterCarrierFunction() { return 7; };   // :666
 preparedSymbolObject = prepareSymbolWrapper(getterCarrier);       // :679

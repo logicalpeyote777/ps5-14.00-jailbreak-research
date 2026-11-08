@@ -1699,6 +1699,41 @@ behaviour. Retested at the real value, `CARRIER_SLOTS = 9000000`, 72 MB of butte
 
 **Nine million slots change nothing.**
 
+**The gate reads the internal type, not the label.** Ten forms were put through
+`Symbol.prototype.toString` on the local JSC to map exactly what it admits:
+
+| Form | `Object.prototype.toString` | Gate |
+|---|---|---|
+| `Symbol('AAA')` | `[object Symbol]` | **PASS** |
+| `Object(Symbol('BBB'))` | `[object Symbol]` | **PASS** |
+| `Symbol.for('CCC')` | `[object Symbol]` | **PASS** |
+| `Symbol.iterator` | `[object Symbol]` | **PASS** |
+| getter returning a raw Symbol | `[object Symbol]` | **PASS** |
+| getter returning a wrapped Symbol | `[object Symbol]` | **PASS** |
+| `Object(7)` | `[object Number]` | throws |
+| `Object(7)` with `Symbol.toStringTag = "Symbol"` | **`[object Symbol]`** | **throws** |
+| Proxy with `toStringTag` returning `"Symbol"` | **`[object Symbol]`** | **throws** |
+| Proxy of a real Symbol | tag read itself errors | throws |
+
+**[static]** Run against `libjavascriptcoregtk-4.1.so.0` through the ctypes testbed (§13.9);
+six forms pass, four throw.
+
+**Six forms pass and every one of them is a real Symbol. Two forms present as `[object Symbol]`
+and still throw.** A Number wearing `Symbol.toStringTag` looks like a Symbol to
+`Object.prototype.toString` and is refused anyway; a Proxy that reports `"Symbol"` for the tag is
+refused; a Proxy wrapping a real Symbol does not even produce a tag. **The gate does not consult
+`toStringTag`. It consults the internal type, and only a real Symbol passes.**
+
+**That excludes a whole class of solutions at once: the carrier cannot fake being a Symbol.** It
+cannot fake it with a tag and it cannot fake it with a Proxy. **Whatever gets through has to be a
+real Symbol.** But `core.js` says `getterCarrier` returns `7`, a Number. **The contradiction
+tightens: either 13.60 had no such check, or the carrier turns the getter's value into a real
+Symbol, and the code says 7.**
+
+**The prediction gains a structural reason.** It is not that the carrier fails to work; it is
+that the carrier cannot pretend. **If a value passes a gate that refuses every forgery, it passes
+because the gate was not there.**
+
 **The contradiction this leaves, and its weight.** The assignment chain in `core.js` is linear:
 
 ```js
