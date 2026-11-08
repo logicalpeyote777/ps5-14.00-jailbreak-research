@@ -2887,6 +2887,47 @@ Prolapse parallel rather than derivative. <strong>Neither project is a finished 
 copying; both are documentation of a front they share.</strong> What is hardware-verified over there is
 the <code>addrof</code>/fake-object/read-write primitive and the ROP executor that consumes it, not a
 completed jailbreak.</p>
+<p><strong>The author's own verdict, which settles what our inference could only suggest.</strong> A notebookcheck
+report of 2026-11-04 carries the position of Prolapse's author, Jose Coixao
+(<code>@notnotzecoxao</code>), after his own testing
+(<a href="https://www.notebookcheck.net/Promising-PS5-console-jailbreak-won-t-work-on-recent-firmware-as-Sony-combats-exploits.1442248.0.html">notebookcheck.net</a>,
+HTTP 200, read in full):</p>
+<pre><code>&quot;After further testing, Coixao determined it doesn't cause memory corruption
+ on the console.&quot;
+
+&quot;The developer doubts the potential PS5 jailbreak can defeat the security
+ protocols of firmware 14.00 and 14.10.&quot;
+</code></pre>
+<p><strong>[upstream]</strong> The claim is the author's, reported by a named outlet on a dated page. <strong>The
+kernel half is unfinished in a specific way: on the two firmwares it was aimed at, the author
+reports that it does not produce the memory corruption the exploit needs.</strong> That is the same
+conclusion this note reaches statically from a repo whose own line reads <em>"Nothing in this repo
+writes kernel memory on 13.60"</em>, arrived at from the other end: <strong>from the inside, by the person
+who wrote it.</strong></p>
+<p><strong>A naming discrepancy, recorded rather than resolved.</strong> The report describes Prolapse as <em>"a
+memory management exploit targeting the <code>aio_multi_delete</code> function"</em>. <strong>Our measured table holds
+<code>aio_multi_wait</code> at 660 and <code>aio_submit</code> at 658; <code>aio_multi_delete</code> is not in our table at all.</strong>
+These are different members of the same <code>aio</code> family. <strong>Nothing here decides which name is the one
+that matters.</strong> The authority for the numbers in this note remains the direct name-table read of
+<code>kernel-13.60-live.bin</code> described above, and the probe rule stated there is a range rather than a
+single number precisely because the naming is unsettled.</p>
+<p><strong>Three further facts from the same report, all consistent with the picture above.</strong></p>
+<p><strong>13.60 is the only jailbroken firmware, and the reason is named:</strong> homebrew experimentation is
+<em>"limited to July software 13.60"</em>, with Relapse and Byepervisor-Reborn removing the need to hunt
+for un-updated consoles. <strong>No kernel jailbreak exists above it.</strong></p>
+<p><strong>Reaching a debug menu is not kernel read/write.</strong> The report records that Gezine reached the
+debug settings menu on a 14.10 console while being <em>"reluctant to make the finding public"</em>, and
+describes the kernel exploit behind it as something that <em>could</em> become a gateway to deeper
+access. <strong>A debug menu reached on 14.10 is userland and configuration access; the kernel read/write
+that would follow it is neither present nor public.</strong> Headlines that read "14.10 already jailbroken"
+describe the menu, not the kernel.</p>
+<p><strong>The window is closing by patch rather than by failure alone.</strong> The vulnerability Prolapse
+targeted was patched in 14.20, and 14.22 shipped on 2 November with additional security fixes.
+<strong>No kernel jailbreak exists on 14.20 or 14.22 either.</strong></p>
+<p><strong>What nobody claims is kernel read/write on 14.00.</strong> Not the author of the most prominent
+candidate, not the report covering him, not the projects adjacent to it. <strong>The absence of that
+claim is the finding here, and it now has a dated external source rather than only the silence of
+a survey.</strong></p>
 <p><strong>The kernel candidate exists elsewhere and not here, and its number is in conflict.</strong>
 Prolapse reports <code>aio_multi_wait</code> as syscall 663, answering <code>EINVAL</code> rather than <code>ENOSYS</code> on
 13.60, which is what makes the bug reachable in principle, with the ABI

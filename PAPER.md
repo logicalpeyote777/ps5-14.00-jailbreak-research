@@ -2632,6 +2632,57 @@ copying; both are documentation of a front they share.** What is hardware-verifi
 the `addrof`/fake-object/read-write primitive and the ROP executor that consumes it, not a
 completed jailbreak.
 
+**The author's own verdict, which settles what our inference could only suggest.** A notebookcheck
+report of 2026-11-04 carries the position of Prolapse's author, Jose Coixao
+(`@notnotzecoxao`), after his own testing
+([notebookcheck.net](https://www.notebookcheck.net/Promising-PS5-console-jailbreak-won-t-work-on-recent-firmware-as-Sony-combats-exploits.1442248.0.html),
+HTTP 200, read in full):
+
+```
+"After further testing, Coixao determined it doesn't cause memory corruption
+ on the console."
+
+"The developer doubts the potential PS5 jailbreak can defeat the security
+ protocols of firmware 14.00 and 14.10."
+```
+
+**[upstream]** The claim is the author's, reported by a named outlet on a dated page. **The
+kernel half is unfinished in a specific way: on the two firmwares it was aimed at, the author
+reports that it does not produce the memory corruption the exploit needs.** That is the same
+conclusion this note reaches statically from a repo whose own line reads *"Nothing in this repo
+writes kernel memory on 13.60"*, arrived at from the other end: **from the inside, by the person
+who wrote it.**
+
+**A naming discrepancy, recorded rather than resolved.** The report describes Prolapse as *"a
+memory management exploit targeting the `aio_multi_delete` function"*. **Our measured table holds
+`aio_multi_wait` at 660 and `aio_submit` at 658; `aio_multi_delete` is not in our table at all.**
+These are different members of the same `aio` family. **Nothing here decides which name is the one
+that matters.** The authority for the numbers in this note remains the direct name-table read of
+`kernel-13.60-live.bin` described above, and the probe rule stated there is a range rather than a
+single number precisely because the naming is unsettled.
+
+**Three further facts from the same report, all consistent with the picture above.**
+
+**13.60 is the only jailbroken firmware, and the reason is named:** homebrew experimentation is
+*"limited to July software 13.60"*, with Relapse and Byepervisor-Reborn removing the need to hunt
+for un-updated consoles. **No kernel jailbreak exists above it.**
+
+**Reaching a debug menu is not kernel read/write.** The report records that Gezine reached the
+debug settings menu on a 14.10 console while being *"reluctant to make the finding public"*, and
+describes the kernel exploit behind it as something that *could* become a gateway to deeper
+access. **A debug menu reached on 14.10 is userland and configuration access; the kernel read/write
+that would follow it is neither present nor public.** Headlines that read "14.10 already jailbroken"
+describe the menu, not the kernel.
+
+**The window is closing by patch rather than by failure alone.** The vulnerability Prolapse
+targeted was patched in 14.20, and 14.22 shipped on 2 November with additional security fixes.
+**No kernel jailbreak exists on 14.20 or 14.22 either.**
+
+**What nobody claims is kernel read/write on 14.00.** Not the author of the most prominent
+candidate, not the report covering him, not the projects adjacent to it. **The absence of that
+claim is the finding here, and it now has a dated external source rather than only the silence of
+a survey.**
+
 **The kernel candidate exists elsewhere and not here, and its number is in conflict.**
 Prolapse reports `aio_multi_wait` as syscall 663, answering `EINVAL` rather than `ENOSYS` on
 13.60, which is what makes the bug reachable in principle, with the ABI
