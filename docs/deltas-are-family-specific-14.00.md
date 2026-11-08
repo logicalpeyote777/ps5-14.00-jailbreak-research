@@ -1,4 +1,4 @@
-# I deltas sono di famiglia, non di modulo — e la stabilità è più stretta del previsto (PS5 14.00)
+# I deltas sono di famiglia, non di modulo, e la stabilità è più stretta del previsto (PS5 14.00)
 
 Engagement `ps5-1400-kernel`. 2026-11-07. Solo 14.00.
 
@@ -49,7 +49,7 @@ tabella.**
 | `longjmp` | ✓ | ✗ |
 | `thread_list` | **✗** | ✗ |
 
-## 4. `pop_rsp` come controllo negativo — funziona
+## 4. `pop_rsp` come controllo negativo, funziona
 
 ```
 10.00: presente a 0x343AA
@@ -72,7 +72,7 @@ un indizio di stessa famiglia; se è diverso, i deltas vanno riscritti.
 `libkernel_web` sul 14.00, sappiamo se i deltas carryano o vanno
 ridefiniti.
 
-## 6. Come va registrato — la forma esatta
+## 6. Come va registrato, la forma esatta
 
 **NON:** *"i deltas sono +0x162C"*
 
@@ -86,8 +86,8 @@ non sai se era quello giusto.
 
 ## 7. La via robusta: misurare il delta sul device, non eredarlo
 
-**Se leggiamo DUE return address distinti nello stesso dump — per esempio
-`slot_expect` e `syscall_wrapper` entrambi presenti in dati leggibili — il
+**Se leggiamo DUE return address distinti nello stesso dump, per esempio
+`slot_expect` e `syscall_wrapper` entrambi presenti in dati leggibili, il
 delta lo misuriamo NOI sul 14.00** invece di eredarlo da 12.xx.
 
 **Perché è più robusto:**
@@ -104,7 +104,7 @@ nemmeno entro la famiglia.
 
 ## 8. Impatto sulla sonda `reclaim-identity`
 
-La sonda armed (plan 1170) **non deriva ancora nulla** — cerca il punto di
+La sonda armed (plan 1170) **non deriva ancora nulla**, cerca il punto di
 ancoraggio. Ma il suo successo va letto con questa regola:
 
 - Se trova **un solo** return address → i deltas restano un'assunzione, e
@@ -127,6 +127,6 @@ Scoperta aggiuntiva: thread_list instabile anche dentro 12.xx
 
 ## 10. File
 
-- `tools_lkfind.js` — tabella `EXPECT` sorgente dei calcoli
-- `xotext-and-delta-method-14.00.md` — il metodo a delta
-- `reclaim-identity-probe-14.00.md` — la sonda armed
+- `tools_lkfind.js`, tabella `EXPECT` sorgente dei calcoli
+- `xotext-and-delta-method-14.00.md`, il metodo a delta
+- `reclaim-identity-probe-14.00.md`, la sonda armed

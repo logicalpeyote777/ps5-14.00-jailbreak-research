@@ -1,4 +1,4 @@
-# Console runbook — PS5 14.00, first boot after the offline period
+# Console runbook, PS5 14.00, first boot after the offline period
 
 Everything below is already armed. This is the order to do things in and what each
 answer means. Console time is the scarce resource; do not spend it on modules that
@@ -11,7 +11,7 @@ waste it.
 | sweep | running, `python3 sweep.py`, pushes one module per plan |
 | queue | 139 modules, priority order below |
 | current plan | `API-availability` as plan 570 |
-| idle-park fix | applied — parked idle plan bumps `plan_id` each cycle so a live-but-idle page re-reports and the sweep un-parks |
+| idle-park fix | applied, parked idle plan bumps `plan_id` each cycle so a live-but-idle page re-reports and the sweep un-parks |
 | DNS | `manuals.playstation.net` → `192.168.1.70` active; shell domain **not** applied |
 | shell-domain flip | staged: `/opt/AGENTS/Ares/tmp/dns_shell.sh apply\|revert\|status` |
 
@@ -35,25 +35,25 @@ The K4 arms are the single most valuable thing on the queue: one arm showing
 corruption on one fd class and not the others settles the static classification
 that is currently capped at "confidenza media".
 
-## 2. Budget warning — the K-modules are expensive
+## 2. Budget warning, the K-modules are expensive
 
 | family | declared `timeout_ms` | observed |
 |---|---|---|
 | `K0-*` | 45 000 | `K0-canary-a` completed at 40 004 ms |
-| `K2-sock_abort-*` | 75 000 | — |
+| `K2-sock_abort-*` | 75 000 |, |
 | `K1-ws_churn-*`, `K3-worker_churn-*` | 135 000 | churn classes exceed 46 s |
 
 The 14 K-modules cost **20+ minutes of console time**. They are slow, not stuck.
 Do not interrupt them.
 
-## 3. Do NOT run these first — they waste console time
+## 3. Do NOT run these first, they waste console time
 
 Re-running the 17 modules that produced no verdict, with a 150 s hard timeout and a
 220 s virtual budget on patched Chromium:
 
 | result | count | meaning for the console |
 |---|---|---|
-| `NO_OUTPUT` | 10 | no verdict in 150 s even on a desktop engine — will burn WebProcess reloads on the PS5 |
+| `NO_OUTPUT` | 10 | no verdict in 150 s even on a desktop engine, will burn WebProcess reloads on the PS5 |
 | ran, never finished | 4 | `pg_begin`/`pg_log`/`pg_report` but no `pg_end` |
 | resolved by the longer timeout | 3 | `aborted` (attempt 3), `unknown` (no crash), `patched` (`leaks: 0`) |
 
@@ -67,8 +67,8 @@ With `MAX_CRASHES = 2` each one can eat two passes before being skipped.
 
 Compare every `pg_end` against the two negative baselines now on disk:
 
-- `probe/chromium_negative_baseline.json` — the 13 head-of-queue modules
-- `probe/chromium_core_driven_baseline.json` — all 112 core-driven modules
+- `probe/chromium_negative_baseline.json`, the 13 head-of-queue modules
+- `probe/chromium_core_driven_baseline.json`, all 112 core-driven modules
 
 **A module that reports the same outcome on patched Chromium as its headline
 "vulnerable" outcome is a false positive.** Across the 112 core-driven modules
@@ -108,7 +108,7 @@ main upstream documents.
 **What is still true, and is the actual headline:** a permission bypass is not a
 memory-safety violation. It changes who is allowed to write; it does not by
 itself produce an arbitrary kernel write. The `sysctl` write branch was measured
-and found bounded — the bound is on `len` (`req->+0x38 - req->+0x40`), there is
+and found bounded, the bound is on `len` (`req->+0x38 - req->+0x40`), there is
 no bound on `oid_arg1`, direction is user -> `oid_arg1` via `rep movsq`, with
 0 chaining and 0 amplification. **So the mechanism is characterized and the
 exploit is still missing. Those are two different gaps and solving one does not
@@ -116,7 +116,7 @@ solve the other.**
 
 Cross-checked against the upstream landscape: **there is no public kernel exploit
 for 14.00 or 14.10 at all.** Relapse stops at 13.60. Upstream's own blocker is
-recorded as "no address of JS-owned memory" — the same wall we are at.
+recorded as "no address of JS-owned memory", the same wall we are at.
 
 ## 7. When leaving the console again
 
@@ -132,7 +132,7 @@ Revert the shell-domain flip if it was applied:
 
 ---
 
-## 8. Matrix room ID — corrected
+## 8. Matrix room ID, corrected
 
 The room ID carried in earlier notes was **wrong by transcription**:
 
@@ -147,12 +147,12 @@ The dropped `Uy` made every send fail with `No such room with id ... found`, and
 
 Discovery method: the bot's nio store at
 `/opt/AGENTS/Ares/matrix/matrix_store/*.db`, table `encryptedrooms`, column
-`room_id` (not `id` — column 0 is the internal row key).
+`room_id` (not `id`, column 0 is the internal row key).
 
 **Verified delivery contract:** the primary path is the bot HTTP listener on
 `127.0.0.1:8772/send` (pid 223923). `exit 0` from `matrix_notify.py` means the
 bot returned 200. Confirm independently with
-`matrix_read.py "<room>" 3` — done, message visible at 07:46.
+`matrix_read.py "<room>" 3`, done, message visible at 07:46.
 
 Note: a `[vault_env] load failed (vault auth failed: 429)` line on stderr is
-unrelated to delivery — the bot HTTP path does not use the vault.
+unrelated to delivery, the bot HTTP path does not use the vault.

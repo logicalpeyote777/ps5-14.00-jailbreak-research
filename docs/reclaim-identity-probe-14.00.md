@@ -1,4 +1,4 @@
-# Sonda 2 — il nostro ArrayBuffer è l'oggetto liberato? (PS5 14.00)
+# Sonda 2, il nostro ArrayBuffer è l'oggetto liberato? (PS5 14.00)
 
 Engagement `ps5-1400-kernel`. 2026-11-07. Solo 14.00.
 
@@ -36,8 +36,8 @@ liberato?**
 4. SCRIVO un marker nei NOSTRI buffer e rileggo
 ```
 
-**Se `alias.getTransform().a` mostra `0x4141414141414141` — un double
-scritto NOI dentro il nostro ArrayBuffer — allora controlliamo la memoria
+**Se `alias.getTransform().a` mostra `0x4141414141414141`, un double
+scritto NOI dentro il nostro ArrayBuffer, allora controlliamo la memoria
 dell'oggetto liberato.**
 
 **È il punto di ancoraggio che manca.** Con una regione di cui conosciamo
@@ -57,7 +57,7 @@ puntatori** su baseline e post-reclaim.
 |---|---|
 | `OUR-BUFFER-IS-THE-FREE-OBJECT` | **il reclaim funziona** → punto di ancoraggio acquisito |
 | `POINTER-FOUND-IN-WINDOW` | nessun reclaim ma c'è un puntatore → si parte da lì |
-| `NO-RECLAIM-NO-POINTER` | **nessun ancoraggio in memoria** — il problema non è la ricerca del leak ma la sua assenza, e va trattato come tale |
+| `NO-RECLAIM-NO-POINTER` | **nessun ancoraggio in memoria**, il problema non è la ricerca del leak ma la sua assenza, e va trattato come tale |
 
 ## 5. Dettagli tecnici
 
@@ -92,11 +92,11 @@ spill / ntfusion-obj   : ancora in coda
 Non è "non abbiamo ancora cercato". È: **non esiste un punto di ancoraggio
 in memoria leggibile con la primitiva attuale.** In quel caso la domanda
 cambia natura e diventa: *la primitiva Canvas alias è strutturalmente troppo
-stretta per qualsiasi leak, e serve un'altra classe di primitiva* — non un
+stretta per qualsiasi leak, e serve un'altra classe di primitiva*, non un
 altro offset, non un altro canale.
 
 ## 8. File
 
-- `gen_reclaim.py` / `reclaim_module.json` — sonda installata
-- `return-address-classifier-14.00.md` — la classificazione già pronta per i candidati
-- `xotext-and-delta-method-14.00.md` — il metodo a delta da replicare dopo il leak
+- `gen_reclaim.py` / `reclaim_module.json`, sonda installata
+- `return-address-classifier-14.00.md`, la classificazione già pronta per i candidati
+- `xotext-and-delta-method-14.00.md`, il metodo a delta da replicare dopo il leak

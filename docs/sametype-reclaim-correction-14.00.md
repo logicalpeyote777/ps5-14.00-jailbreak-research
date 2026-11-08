@@ -1,13 +1,13 @@
-# Il reclaim ArrayBuffer ammazza il processo — la mia sonda aveva il difetto che loro hanno già diagnosticato (PS5 14.00)
+# Il reclaim ArrayBuffer ammazza il processo, la mia sonda aveva il difetto che loro hanno già diagnosticato (PS5 14.00)
 
 Engagement `ps5-1400-kernel`. 2026-11-07. Solo 14.00.
 
 **Nota di reperimento:** il doc `FONTFACE_SECOND_RECLAIM_RECONCILIATION_2026-11-06.md`
 **non è in `1nk1/PS5-Prolapse`** (che ha solo `docs/PROJECT_HANDOFF.md`).
-È in **`ZigZagBoi1/PS5-14.10-Research`** — repo con 8 815 blob. Tutti i
+È in **`ZigZagBoi1/PS5-14.10-Research`**, repo con 8 815 blob. Tutti i
 riferimenti che seguono sono da lì.
 
-## 1. Le tre affermazioni del lead — verificate
+## 1. Le tre affermazioni del lead, verificate
 
 **a) Novità kind-swap: confermata.** Nessun doc upstream nomina
 `sysctl`/`oid_kind`/`PRIV_SYSCTL`/`CTLFLAG` come bypass.
@@ -41,8 +41,7 @@ ROOT CAUSE: zeroed spray -> null vtable, null m_canvas, null m_stateStack.
 Every C++ code path accesses at least one of these -> null deref -> crash.
 ```
 
-**La mia v1 spruzzava ArrayBuffer e poi chiamava `alias.getTransform()` —
-che è un metodo C++.**
+**La mia v1 spruzzava ArrayBuffer e poi chiamava `alias.getTransform()`, che è un metodo C++.**
 
 ## 3. L'evidenza del crash, non l'ipotesi
 
@@ -62,7 +61,7 @@ che è un metodo C++.**
 **Il processo muore alla prima chiamata C++ dopo lo spray ArrayBuffer.**
 6 beacon totali, tutti nello stesso secondo.
 
-## 4. Il loro fix — copiato
+## 4. Il loro fix, copiato
 
 ```
 NEW APPROACH: Don't spray with ArrayBuffers. Instead, immediately after the
@@ -96,7 +95,7 @@ FASE F  ArrayBuffer spray, MA dopo NON si chiama nessun metodo C++
 ```
 
 **L'ArrayBuffer non è eliminato: è spostato in fase finale e dopo di esso
-nessun metodo C++.** Così la v1 non muore più per ipotesi — viene testata
+nessun metodo C++.** Così la v1 non muore più per ipotesi, viene testata
 per quello che è, e se muore lo sappiamo dall'ultimo `STEP` registrato.
 
 ### Disciplina anti-crash
@@ -104,7 +103,7 @@ per quello che è, e se muore lo sappiamo dall'ultimo `STEP` registrato.
 **Ogni chiamata C++ passa da `probeMethod()` che POSTa `M-PRE` prima di
 eseguirla.** 5 chiamate, 1 sito di POST centralizzato. Se il processo muore,
 l'ultimo `M-PRE` senza il suo `M-OK`/`M-CRASH` dice **esattamente quale
-metodo ha ucciso** — non "è morto da qualche parte".
+metodo ha ucciso**, non "è morto da qualche parte".
 
 ### Verdetti
 
@@ -116,24 +115,24 @@ metodo ha ucciso** — non "è morto da qualche parte".
 
 ## 6. Cosa cambia nella lettura del blocker
 
-**Il loro blocker — *"no address of JS-owned memory"* — resta.** Ma la
+**Il loro blocker, *"no address of JS-owned memory"*, resta.** Ma la
 forma same-type cambia la natura di cosa si ottiene:
 
 | | ArrayBuffer reclaim | Same-type reclaim |
 |---|---|---|
 | Vtable dell'oggetto nella slot | **null → crash** | **valida** |
 | Metodi C++ usabili | no | **sì** |
-| Regione controllata | nessuna | **sì — noi scriviamo ctx2, inner legge** |
+| Regione controllata | nessuna | **sì, noi scriviamo ctx2, inner legge** |
 
 **Se `inner.globalAlpha` legge `0.777` scritto su `ctx2`, abbiamo una
 regione di memoria condivisa e controllata da entrambe le parti.** Non è
 ancora un indirizzo assoluto, ma è il primo punto in cui **sappiamo cosa
 c'è dentro** e **possiamo scriverci attraverso due oggetti diversi**.
 
-## 7. Caveat firmware — stessa lezione dei deltas
+## 7. Caveat firmware, stessa lezione dei deltas
 
 **Loro sono su 14.10, noi su 14.00.** Il reclaim same-type è un meccanismo,
-non un offset — ma **va verificato da noi, non eredarlo.** La forma
+non un offset, ma **va verificato da noi, non eredarlo.** La forma
 `fresh-face-per-phase` che loro dimostrano su 14.10 non è dimostrata su 14.00.
 
 ## 8. Stato
@@ -148,7 +147,7 @@ Pagina: morta, riarmo necessario
 
 ## 9. File
 
-- `zz_p568_arraybuffer_768_reclaim.js` — il loro esperimento, v12 con la diagnosi
-- `v704.txt` — l'evidenza del crash (6 beacon, morte a `PRE-READ`)
-- `zz_FONTFACE_SECOND_RECLAIM_RECONCILIATION_2026-11-06.md` — la distinzione di forma
-- `gen_sametype.py` / `sametype_module.json` — la sonda ricostruita
+- `zz_p568_arraybuffer_768_reclaim.js`, il loro esperimento, v12 con la diagnosi
+- `v704.txt`, l'evidenza del crash (6 beacon, morte a `PRE-READ`)
+- `zz_FONTFACE_SECOND_RECLAIM_RECONCILIATION_2026-11-06.md`, la distinzione di forma
+- `gen_sametype.py` / `sametype_module.json`, la sonda ricostruita

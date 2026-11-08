@@ -1,4 +1,4 @@
-# Runner a due tempi — da 1 a N+1 sonde per reopen (PS5 14.00)
+# Runner a due tempi, da 1 a N+1 sonde per reopen (PS5 14.00)
 
 Engagement `ps5-1400-kernel`. 2026-11-07. Solo 14.00.
 
@@ -36,18 +36,18 @@ e vivi.
 
 **Ogni POST è eager**: un crash in fase 2 non porta via la fase 1.
 
-## 3. Il runner installato — `batch-harvest-1400`
+## 3. Il runner installato, `batch-harvest-1400`
 
-### FASE 1 — non letale, 4 censimenti
+### FASE 1, non letale, 4 censimenti
 
 | | Cosa | Perché |
 |---|---|---|
 | **1A** | **censimento 25 API** nel WebProcess | la nostra superficie reale: canvas, offscreenCanvas, ImageData, webgl/2, wasm, worker, indexedDB, webcodecs, DOMMatrix, structuredClone, FontFace… |
-| **1B** | **caccia al globale-numero** | **l'equivalente nostro di `__ps5NativeCtor`** — loro prendono la base WebKit da un globale JS che contiene un indirizzo. Scansione di tutte le proprietà di `window` per numeri che sembrano indirizzi |
+| **1B** | **caccia al globale-numero** | **l'equivalente nostro di `__ps5NativeCtor`**, loro prendono la base WebKit da un globale JS che contiene un indirizzo. Scansione di tutte le proprietà di `window` per numeri che sembrano indirizzi |
 | **1C** | **forma degli oggetti DOM** | prerequisito del `leakval` di Prolapse (`read8(leakval(textArea)+0x18)`): own-property di textarea/div/canvas/img/input |
-| **1D** | **baseline contesto VIVO** | cosa restituisce un contesto appena creato, prima di ogni UAF — il termine di confronto per ogni lettura post-reclaim |
+| **1D** | **baseline contesto VIVO** | cosa restituisce un contesto appena creato, prima di ogni UAF, il termine di confronto per ogni lettura post-reclaim |
 
-### FASE 2 — letale, per ultima
+### FASE 2, letale, per ultima
 
 UAF trigger → alias → **reclaim stesso tipo** (`ctx2`) → verifica
 `globalAlpha` → sopravvivenza metodi C++.
@@ -64,8 +64,8 @@ XHR sync                            : True
 25 API censite                      : True
 ```
 
-**Il controllo decisivo è il terzo:** `defineProperty` — il getter che crea
-la UAF — **esiste solo dentro `phase2`**. La fase 1 non può innescare la
+**Il controllo decisivo è il terzo:** `defineProperty`, il getter che crea
+la UAF, **esiste solo dentro `phase2`**. La fase 1 non può innescare la
 morte per costruzione, non per attenzione.
 
 ## 5. Nota sul processo: due errori presi e verificati
@@ -77,7 +77,7 @@ errore di sintassi**, perché i controlli sono string-based e girano comunque.
 Ora il `node --check` è a monte e blocca.
 
 **b) Il bug era `}` invece di `});`** sulla chiusura di
-`addEventListener` — classe di errore che i controlli per substring non
+`addEventListener`, classe di errore che i controlli per substring non
 vedono mai.
 
 **c) La mia prima verifica d'ordine era sbagliata:** `indexOf("phase2()")`
@@ -91,10 +91,10 @@ rispondeva `false` su codice corretto. Rifatta cercando la chiamata reale
 |---|---|---|
 | Sonde per reopen | 1 | **4 non letali + 1 letale = 5** |
 | Informazione per reopen | 1 verdetto | 4 censimenti + 1 verdetto |
-| Rischio | — | **invariato**: la letale è comunque l'ultima cosa che gira |
+| Rischio |, | **invariato**: la letale è comunque l'ultima cosa che gira |
 
 **Il rischio non aumenta**: la fase letale occupa la stessa posizione che
-occupava prima — l'ultima. Tutto ciò che la precede è dimostrato non
+occupava prima, l'ultima. Tutto ciò che la precede è dimostrato non
 in grado di uccidere.
 
 ## 7. Stato
@@ -109,6 +109,6 @@ Pagina: morta, riarmo necessario
 
 ## 8. File
 
-- `gen_harvest.py` / `harvest_module.json` — il runner
-- `sametype-reclaim-correction-14.00.md` — la logica della fase 2
-- `xotext-scope-webkit-base-derivation-14.00.md` — il contesto di 1B
+- `gen_harvest.py` / `harvest_module.json`, il runner
+- `sametype-reclaim-correction-14.00.md`, la logica della fase 2
+- `xotext-scope-webkit-base-derivation-14.00.md`, il contesto di 1B

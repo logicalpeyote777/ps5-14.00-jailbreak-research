@@ -1,4 +1,4 @@
-# xotext e il metodo a delta — il piano di scan del testo era sbagliato (PS5 14.00)
+# xotext e il metodo a delta, il piano di scan del testo era sbagliato (PS5 14.00)
 
 Engagement `ps5-1400-kernel`. 2026-11-07. Solo 14.00.
 
@@ -24,21 +24,19 @@ strings ps5-sys.pup | grep .sprx -> nessuna stringa leggibile
 praticabile da noi, e non lo è nemmeno per chi il jailbreak ce l'ha
 funzionante.**
 
-## 2. Il testo è execute-only — lo scan del testo è impossibile
+## 2. Il testo è execute-only, lo scan del testo è impossibile
 
 > *"Signature-scanning libkernel **text** is impossible (the libraries are
 > **xotext**; reading code through the R/W primitive **faults and kills the
 > process**)."*
 
-**Questo uccide il nostro piano storico** — *"scan del testo WebKit per
-`5f c3` / `5e c3` / `5a c3` / `59 c3` per ricostruire la `wk_gadgetmap`"*
-— e **potrebbe spiegare diversi dei nostri crash**: non lettura sbagliata, ma
+**Questo uccide il nostro piano storico**, *"scan del testo WebKit per
+`5f c3` / `5e c3` / `5a c3` / `59 c3` per ricostruire la `wk_gadgetmap`"*, e **potrebbe spiegare diversi dei nostri crash**: non lettura sbagliata, ma
 lettura di una pagina che non è leggibile per costruzione.
 
 **CORREZIONE (verificata dopo):** la fonte parla **solo di `libkernel`**.
 Non c'è menzione di WebKit insieme a xotext. **Non affermiamo che il testo
-WebKit sia xotext: non è testato da loro.** Ciò che sappiamo è più utile —
-il loro metodo **non legge mai testo di codice**: la base WebKit viene da
+WebKit sia xotext: non è testato da loro.** Ciò che sappiamo è più utile, il loro metodo **non legge mai testo di codice**: la base WebKit viene da
 `__ps5NativeCtor` (globale JS) o dalla vtable in `.data.rel.ro`, che è
 dati. Vedi `xotext-scope-webkit-base-derivation-14.00.md`.
 
@@ -60,19 +58,19 @@ longjmp         - slot_expect = +0x3C11
 **Nessuno scan di codice execute-only. Un indirizzo letto dallo stack + una
 costante.**
 
-## 4. Tre dettagli che sono costati run veri — da copiare
+## 4. Tre dettagli che sono costati run veri, da copiare
 
 | | |
 |---|---|
 | **Anchor-first pick** | Il primo picker scelse il frame più alto: `0x2198D`, il **thread-entry trampoline**, semantica sbagliata. Il valore giusto `0x1988B` era nella lista di candidati tutto il tempo (frame-validated a `stack+0x7fc28`). Un àncora nota vince sempre quando è presente. |
-| **Data-word exclusion** | **25 candidati su 38** erano `libkernel+0x751D0` = **`__stack_chk_guard`** — una parola *di dati* copiata in molti frame, **non** un return address. Va collassata ed esclusa. Confermato indipendentemente da `OFFSET_lk___stack_chk_guard`. |
-| **BigInt discipline** | `slot_expect + DELTAS.x` lanciò `Invalid mix of BigInt and other type` — e lo lanciò **dopo** che la riga sbagliata era già stata applicata e persistita. I delta sono BigInt literal e `JSON.stringify` richiede un replacer. |
+| **Data-word exclusion** | **25 candidati su 38** erano `libkernel+0x751D0` = **`__stack_chk_guard`**, una parola *di dati* copiata in molti frame, **non** un return address. Va collassata ed esclusa. Confermato indipendentemente da `OFFSET_lk___stack_chk_guard`. |
+| **BigInt discipline** | `slot_expect + DELTAS.x` lanciò `Invalid mix of BigInt and other type`, e lo lanciò **dopo** che la riga sbagliata era già stata applicata e persistita. I delta sono BigInt literal e `JSON.stringify` richiede un replacer. |
 
 **Il secondo è la trappola che avremmo preso in pieno:** scansionando lo
 stack per "valori che sembrano puntatori" il **65% dei candidati sarebbe
 stato il canary dello stack**, non un return address.
 
-## 5. Validazione di `lkfind.js` — fatta ora, 6/6
+## 5. Validazione di `lkfind.js`, fatta ora, 6/6
 
 Costruita immagine sintetica con le firme ai offset noti di 10.00
 (`file_off = rva + 0x4000`):
@@ -100,7 +98,7 @@ check the image, the --strip convention, and that the file really is libkernel_w
 ```
 
 **Rifiuta il run anche con 5/6 match.** È la stessa disciplina del §7.8
-applicata a monte — e qui è *nel tool*, non nella nostra attenzione.
+applicata a monte, e qui è *nel tool*, non nella nostra attenzione.
 
 ## 6. Il blocco nostro per replicare il calibrate
 
@@ -113,7 +111,7 @@ WebProcess della guida.
 | # | Candidato | Stato |
 |---|---|---|
 | 1 | Stack del thread principale JS | da verificare se raggiungibile con la R/W |
-| 2 | `ArrayBuffer` allocato da noi in cui qualcosa ritorna — analogo del "parked stack" | da costruire |
+| 2 | `ArrayBuffer` allocato da noi in cui qualcosa ritorna, analogo del "parked stack" | da costruire |
 | 3 | Backing store del canvas | già sotto test con `pixel-bytewrite` |
 
 **Se uno dei tre è leggibile e contiene un return address di
@@ -122,14 +120,14 @@ execute-only.**
 
 ## 7. Cosa resta valido del piano firme
 
-Le **firme restano l'asset giusto** — cambia il **supporto** su cui
+Le **firme restano l'asset giusto**, cambia il **supporto** su cui
 applicarle:
 
 | | Prima | Ora |
 |---|---|---|
 | Target | testo WebKit / testo libkernel | **stack e dati leggibili** |
 | Metodo | scan di byte pattern nel codice | **return address + delta costanti** |
-| Vincolo | — | **xotext: mai leggere codice con la R/W** |
+| Vincolo |, | **xotext: mai leggere codice con la R/W** |
 
 **`pop_rsp` come controllo negativo resta prezioso:** la sua assenza da
 `libkernel_web` in 12.xx è ciò che dice che il `pop rsp` va preso da
@@ -137,7 +135,7 @@ WebKit. Un negativo che indica dove guardare.
 
 ## 8. File
 
-- `tools_lkfind.js` — scanner validato 6/6
-- `docs_PROJECT_HANDOFF.md` — 52 827 B, §9.2 è il pezzo chiave
-- `rop.js` (19 165 B), `syscalls.js` (16 469 B) — scaricati, da leggere
-- `/tmp/lkw_synth_1000c.sprx` — immagine di validazione
+- `tools_lkfind.js`, scanner validato 6/6
+- `docs_PROJECT_HANDOFF.md`, 52 827 B, §9.2 è il pezzo chiave
+- `rop.js` (19 165 B), `syscalls.js` (16 469 B), scaricati, da leggere
+- `/tmp/lkw_synth_1000c.sprx`, immagine di validazione

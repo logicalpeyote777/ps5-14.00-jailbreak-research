@@ -1,4 +1,4 @@
-# CATENA CORRETTA — PS5 14.00 (aggiornata 2026-11-07, round 26)
+# CATENA CORRETTA, PS5 14.00 (aggiornata 2026-11-07, round 26)
 
 **Questo file sostituisce la "catena di lavoro attuale" dell'obiettivo del goal,
 che contiene due passi CHIUSI. Se leggi questo file, ignora i passi (2) e (3)
@@ -56,17 +56,17 @@ fermi allo stesso punto nostro. Nessuno dei due ha l'indirizzo di memoria JS-own
 
 ## Branchi chiusi con evidenza (NON riaprire)
 
-1. **FontFace UAF** — crash dentro `document.fonts.load()`, 15 run verbatim upstream.
+1. **FontFace UAF**, crash dentro `document.fonts.load()`, 15 run verbatim upstream.
    **Nota: chiuso per LA NOSTRA FORMA** (secondo `load()` sulle stesse facce =
    `S2-b`=0, identico al loro). **La forma `fresh-face-per-phase + GC` completo
    NON e' mai stata provata da noi e loro la dimostrano funzionante su 14.10.**
-2. **lineDash Vector m_size** — `NO-REACHABLE-OFFSET`, oracolo vivo `baseline: 4`
-3. **alias-window pointer deref** — `NO-POINTER-IN-WINDOW`, 12 slot bit grezzi
-4. **vtable code-slot** — `slots=88 codeish=0`
-5. **setter float64 come canale di puntatore** — `SETTER-NORMALIZES-DENORMAL`
+2. **lineDash Vector m_size**, `NO-REACHABLE-OFFSET`, oracolo vivo `baseline: 4`
+3. **alias-window pointer deref**, `NO-POINTER-IN-WINDOW`, 12 slot bit grezzi
+4. **vtable code-slot**, `slots=88 codeish=0`
+5. **setter float64 come canale di puntatore**, `SETTER-NORMALIZES-DENORMAL`
    (FTZ azzera nel path del setter, non nella rappresentazione)
-6. **canvas backing store** — `data_len=64` tutto zero, `putImageData` non commitma
-7. **ArrayBuffer spray + metodo C++** — null vtable, crash (upstream v12)
+6. **canvas backing store**, `data_len=64` tutto zero, `putImageData` non commitma
+7. **ArrayBuffer spray + metodo C++**, null vtable, crash (upstream v12)
 
 ## Vincoli operativi
 
