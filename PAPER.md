@@ -1103,11 +1103,12 @@ names the same device, a dump of the `pup_update0` ioctl handler, and the same p
 *"If you have a jailbroken PS5 on FW 13.60 or below."* **Two independent directions, same
 conclusion, same named blocker.**
 
-**That project's README read in full, and what it adds beyond the table.** The full text of
-`deepkicks/TitaniaPy`
-([raw.githubusercontent.com/deepkicks/TitaniaPy/main/README.md](https://raw.githubusercontent.com/deepkicks/TitaniaPy/main/README.md),
-HTTP 200) documents the extraction path rather than only the wall. **Its summary line, verbatim:
-"The tool is one key away from full PUP decryption."**
+**That project's documentation read in full, and what it adds beyond the table.** The README and
+the technical write-up of `deepkicks/TitaniaPy`
+([README.md](https://raw.githubusercontent.com/deepkicks/TitaniaPy/main/README.md) and
+[RESEARCH_POST.md](https://raw.githubusercontent.com/deepkicks/TitaniaPy/main/RESEARCH_POST.md),
+both HTTP 200) document the extraction path rather than only the wall. **Its summary line,
+verbatim: "The tool is one key away from full PUP decryption."**
 
 **The extraction chain, as documented rather than inferred.** Three steps:
 
@@ -1123,6 +1124,75 @@ between pre/post LSB snapshots to catch key loading"*, which is `encsrv_decrypt_
 `0xC0184402` on `/dev/pup_update0` described above. **Two independent readings of the same
 ioctl, one from the kernel image and one from a payload that calls it.**
 
+**The full ioctl interface, with the dispatch that selects the key.** Mapped from the on-console
+tool's source and reproduced in the write-up:
+
+```
+0xC0104401  VerifyBlsHeader           buffer, length, unknown
+0xC0184402  DecryptHeader            buffer, length, type      <-- the key selector
+0xC0184403  VerifyPupAdditionalSign  index, buffer, length
+0xC0184404  VerifyPupWatermark       index, buffer, length
+0xC0184405  DecryptSegment           index, buffer, length
+0xC0284406  DecryptSegmentBlock      entry_idx, block_idx, block_buf, block_len,
+                                     table_buf, table_len
+```
+
+**`DecryptHeader` takes a `type` argument that picks which key to load: `PS5UPDATE1.PUP`
+(system updates) is type 1, `PS5UPDATE2.PUP` (recovery) is type 0.** The write-up reports the
+resulting shape in the handler: a `cmp type, 1` dispatch branch ahead of the code that loads the
+system update key. **The ioctl this note names as the blocker is not one operation but a keyed
+selector, and the branch that matters is identified rather than assumed.**
+
+**Our 14.00 artifact confirmed by an independent measurement.** The write-up tests two retail
+PUPs and records:
+
+```
+FW 14.00   1 260 600 832 bytes   BLS entry size 0x4B2339D5
+FW 14.10   1 261 408 256 bytes   BLS entry size 0x4B2F8A3D
+```
+
+**Both numbers match this note's artifact exactly**: the 14.00 file at 1 260 600 832 bytes with
+BLS entry `0x4B2339D5` at `0x24`, and the 14.10 file at `0x4B2F8A3D`. **Two independent
+fingerprint chains, same two files.** The inner header fields also agree with the structure read
+here: magic `0xEEF51454`, header size `0x5B0`, hash table `0xDE0`, and 256 of 256 bytes
+differing between the two firmwares in the encrypted extended header, which is the same
+divergence this note shows at `0x400`.
+
+**The strongest external support for the block: an exhaustive published negative.** Their Finding
+3 replicates the KMB_AES derivation chain and runs an eight-phase scan against the encrypted
+headers of **both** 14.00 and 14.10 simultaneously:
+
+| Phase | What was tried |
+|---|---|
+| 1 | 17 known static keys × 6 IV variants × 3 modes (CBC/ECB/CTR) |
+| 2 | KMB_AES chain: slots 4, 5, 7, 8, 9, both halves, key+IV combinations |
+| 3 | ROM key blocks: every 16-byte window, plus chains through key7 → key8/key9 |
+| 4 | XOR combinations: master^OTP, master^SALT, OTP^SALT, master^ROM, master^K8/K9 |
+| 5 | AES-256 with all 32-byte keys: ROM windows, PBKDF2-256, raw keyseeds |
+| 6 | PBKDF2 variants: SHA-256/SHA-1/SHA-512, 16 and 32 byte output, header-mixed salts |
+| 7 | Sliding window: every 16-byte key from concatenated keyseed material, 257 windows × 2 PUPs × 2 modes |
+| 8 | AES in the encrypt direction with master, EMC header key, K8 keyseed |
+
+**Their result, verbatim: "Zero matches across hundreds of combinations on both firmware
+versions."** The validation is not a fuzzy match: a candidate is accepted only if the decrypted
+first 32 bytes put `file_size` within about 1 MB of the known BLS entry size and `segment_count`
+between 1 and 99. **That is a negative with a defined acceptance test, not an absence of a hit.**
+
+**What that negative establishes.** The Layer 1 key is not derivable from the public key material
+by any route tried here or there, on the exact firmware this note targets. **This note's "blocked"
+was a static reading of one kernel image; it is now a static reading plus an independent
+exhaustive search across two firmware versions that came back empty on the same question.** The
+write-up draws the same conclusion about the keyseeds: they appear to serve Layer 3 inner
+firmware operations, **not** Layer 1 container crypto.
+
+**Why the extraction goes through a handler dump rather than a direct read.** The write-up states
+the limitation plainly: Byepervisor Reborn gives kernel and hypervisor read/write but **not**
+direct PSP memory access. **The security processor cannot simply be dumped, which is why the
+chain runs through the driver's code rather than through the processor's memory: dump
+`d_ioctl`, `d_open` and `d_close`, disassemble with capstone, find where the key is sourced,
+then read that address.** The same source notes the PSP may lock out after boot on newer firmware,
+which is why the instrumented pre/post slot diff is treated as the less reliable approach.
+
 **The kernel access requirement, in the source's own words:** *"kernel R/W via Byepervisor Reborn
 + Relapse + etaHEN or similar"*, with the caller expected to supply `kernel_read64` and
 `kernel_copyout`. **The precondition is identical to the one this note states: a jailbroken PS5 on
@@ -1137,29 +1207,37 @@ layer 2 blocked as a dependent of layer 1. **Two layers are solved and two are b
 "3 of 4" is a looser statement than the table supports.** The dependency is the useful part:
 **layer 2 does not need its own key discovery, it needs layer 1.**
 
-**The payload is no longer read-only.** The README records that *"V4 has replaced V2"* and that
-*"V4 possesses abilities to flash southbridge WITHOUT a backup."* **A tool whose earlier
-versions were a diagnostic and whose current version can write southbridge flash without first
-backing it up changes what running it costs.** Worth knowing before anyone runs it on the one
-console that can extract the key.
+**The payload is no longer read-only, and the two documents date the change.** The technical
+write-up describes its extraction payload in these words:
+
+```
+All operations are read-only — nothing is written to kernel or CCP state.
+```
+
+The README records that *"V4 has replaced V2"* and that *"V4 possesses abilities to flash
+southbridge WITHOUT a backup."* **The read-only claim is true of the version the write-up
+documents and not of the version currently shipped.** A tool whose earlier versions were a
+diagnostic and whose current version can write southbridge flash without first backing it up
+changes what running it costs. **Worth knowing before anyone runs it on the one console that
+can extract the key.**
 
 **The key set they already hold** is enumerated as ROM, keyseeds, OTP/KDF, Titania and firmware
 keys, with the note that referenced keys are publicly documented on psdevwiki. **The missing key
 is not missing for lack of looking; it is the one that does not leave the security processor
 without code execution on the console.**
 
-**A third public assertion of the same blocker, with its sourcing stated.** A GBAtemp thread of
-2026-10-15 is titled *"Built a PC-based PUP decrypt tool: one key away from decrypting any
-firmware forever. Need someone on 13.60 to run an extraction payload"*
+**The forum thread is the same source, not a third confirmation.** A GBAtemp thread of 2026-10-15
+is titled *"Built a PC-based PUP decrypt tool: one key away from decrypting any firmware forever.
+Need someone on 13.60 to run an extraction payload"*
 ([gbatemp.net/…/685380](https://gbatemp.net/threads/built-a-pc-based-pup-decrypt-tool-one-key-away-from-decrypting-any-firmware-forever-need-someone-on-13-60-to-run-an-extraction-payload.685380/)).
 **The page sits behind a Cloudflare challenge: a direct fetch returns HTTP 403 with a "Just a
-moment…" interstitial, so the thread body was never read.** The title, the date and one snippet
-line, *"a read-only diagnostic tool that dumps information about how the PS5 handles PUP
-firmware decryption"*, are what the record holds. **Its wording is close enough to TitaniaPy's
-that the two may be the same author posting in two places, a day apart; independence between them
-is not established.** **The facts do not depend on settling that question: the layer structure,
-the blocked key and the 13.60 precondition are verified against the TitaniaPy README, whoever
-wrote the forum thread.**
+moment…" interstitial, so the thread body was never read.** The write-up inside the repository is
+titled *"I Built a PC-Based PS5 PUP Decrypt Tool: Need Someone to Dump the EncryptService Key So
+It Works Forever"*, and it is the technical document behind the same tool the thread announces.
+**One project, published in two places. Counting the forum thread and the repository as two
+confirmations would double-count one source.** **Everything this note takes from that project is
+taken from the repository text, which was read directly; the forum thread contributes nothing the
+repository does not already carry.**
 
 **What this changes about the blocker.** The universality of the Layer 1 key is claimed publicly
 outside this note, and the extraction precondition matches rather than conflicts. **The PC side of
