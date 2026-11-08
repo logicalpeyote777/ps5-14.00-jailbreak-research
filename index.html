@@ -2033,6 +2033,30 @@ the length field, not finding a different bug.</strong></p>
 how wide the resulting read is. <strong>Whoever controls the length field controls the window, and
 that is a control point distinct from the gate.</strong> A value can clear the gate and still be too
 narrow to read anything useful through, which is exactly the case below.</p>
+<p><strong>The description is the content of the window.</strong> A carrier getter that constructs a Symbol with
+a chosen description was tested through the full chain, reading past the earlier 16-byte cap:</p>
+<pre><code>getter -&gt; Symbol(desc_len=0)    str_len=8     readable@7=1     = desc_len+1
+getter -&gt; Symbol(desc_len=16)  str_len=24    readable@7=17    = desc_len+1
+getter -&gt; Symbol(desc_len=32)  str_len=40    readable@7=33    = desc_len+1
+getter -&gt; Symbol(desc_len=100) str_len=108   readable@7=101   = desc_len+1
+</code></pre>
+<p><strong>[static]</strong> The law holds with the getter in the path, not only with a directly constructed
+Symbol. The bytes read at offset 7 for a 16-character description:</p>
+<pre><code>codes@7: [65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80, 41, NaN, NaN, NaN]
+           'A'------------------------------------------'P'    ')'
+</code></pre>
+<p><strong>Sixteen description characters <code>0x41</code> through <code>0x50</code>, then <code>0x29</code> for the closing parenthesis,
+then <code>NaN</code>.</strong> The window reads the Symbol's own description byte for byte. <strong>It is not a window
+onto adjacent memory; it is a window onto the description of the Symbol itself.</strong></p>
+<p><strong>The bridge, stated as a construction.</strong> If the carrier's getter returns a Symbol whose
+description is derived from the carrier's contents, then the carrier controls both the width and
+the content of the read: <strong>to control what is read, control the Symbol's description; to widen
+the window, lengthen the description.</strong> The length field is not a passive constraint on the
+read. <strong>It is the read.</strong></p>
+<p><strong>Three components, all controllable.</strong> The gate is satisfied by handing over a real Symbol. The
+width is set by the description's length. The content is the description itself. <strong>A primitive
+that produces a Symbol with a chosen description controls all three at once</strong>, which is a
+stronger position than the window model suggested an hour earlier.</p>
 <p><strong>Our variant is not Prolapse's primitive, and the difference matters.</strong> A getter returning a
 real Symbol clears the gate and yields a bounded window needing <code>str_len &gt;= 23</code>. Prolapse's
 getter returns <code>7</code>, which does not clear the gate on 14.00 at all. <strong>These are different

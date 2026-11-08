@@ -1777,6 +1777,39 @@ how wide the resulting read is. **Whoever controls the length field controls the
 that is a control point distinct from the gate.** A value can clear the gate and still be too
 narrow to read anything useful through, which is exactly the case below.
 
+**The description is the content of the window.** A carrier getter that constructs a Symbol with
+a chosen description was tested through the full chain, reading past the earlier 16-byte cap:
+
+```
+getter -> Symbol(desc_len=0)    str_len=8     readable@7=1     = desc_len+1
+getter -> Symbol(desc_len=16)  str_len=24    readable@7=17    = desc_len+1
+getter -> Symbol(desc_len=32)  str_len=40    readable@7=33    = desc_len+1
+getter -> Symbol(desc_len=100) str_len=108   readable@7=101   = desc_len+1
+```
+
+**[static]** The law holds with the getter in the path, not only with a directly constructed
+Symbol. The bytes read at offset 7 for a 16-character description:
+
+```
+codes@7: [65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80, 41, NaN, NaN, NaN]
+           'A'------------------------------------------'P'    ')'
+```
+
+**Sixteen description characters `0x41` through `0x50`, then `0x29` for the closing parenthesis,
+then `NaN`.** The window reads the Symbol's own description byte for byte. **It is not a window
+onto adjacent memory; it is a window onto the description of the Symbol itself.**
+
+**The bridge, stated as a construction.** If the carrier's getter returns a Symbol whose
+description is derived from the carrier's contents, then the carrier controls both the width and
+the content of the read: **to control what is read, control the Symbol's description; to widen
+the window, lengthen the description.** The length field is not a passive constraint on the
+read. **It is the read.**
+
+**Three components, all controllable.** The gate is satisfied by handing over a real Symbol. The
+width is set by the description's length. The content is the description itself. **A primitive
+that produces a Symbol with a chosen description controls all three at once**, which is a
+stronger position than the window model suggested an hour earlier.
+
 **Our variant is not Prolapse's primitive, and the difference matters.** A getter returning a
 real Symbol clears the gate and yields a bounded window needing `str_len >= 23`. Prolapse's
 getter returns `7`, which does not clear the gate on 14.00 at all. **These are different
