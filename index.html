@@ -3057,19 +3057,156 @@ known defect at the time. <strong>PS5 13.60 is still an open request</strong>, f
 asking whether the loader would be updated for it. <strong>For 14.00: zero issues, zero commits, zero
 release notes. Nobody has named it, let alone reached it.</strong> <strong>If the foothold runs on 14.00, that is
 a first.</strong></p>
-<p><strong>The honest boundary on the last step.</strong> The kernel primitive is real, well understood, and gives
-arbitrary read and write: <code>IPV6_PKTINFO</code> handled through a master/worker socket pair, with
-<code>kread20</code> and <code>kwrite20</code> in <code>lapse.lua:1557-1567</code> and the amplification to unbounded length
-through a pipe pair in <code>kernel.lua:166+</code>. <strong>It is not read-only; it writes.</strong> <strong>What is not
-established is coverage of 14.00.</strong> The offset tables the loader carries stop well short of the
-target: the PS5 list tops out at 10.01 and the PS4 list at 12.02, with no 13.xx and no 14.xx
-entry in either. <strong>The kernel patches bundled in the loader are PS4-only, and there is no PS5 14.00
-patch present.</strong> Whether Sony patched the underlying <code>ip6_pktopts</code> behaviour in 14.00 cannot be
-settled offline, because settling it requires the same L1 decryption that blocks everything else
-in this note. <strong>"The code is present in the loader" is not the same statement as "it works on
-14.00", and the gap between those two is exactly what the device test is for.</strong> The loader does
-carry runtime offset discovery alongside the static tables, which is the mechanism by which the
-gap might close without a hand-authored entry.</p>
+<p><strong>The boundary on the last step, quantified rather than asserted.</strong> The kernel primitive is real,
+well understood, and gives arbitrary read and write: <code>IPV6_PKTINFO</code> handled through a
+master/worker socket pair, with <code>kread20</code> and <code>kwrite20</code> in <code>lapse.lua:1557-1567</code> and the
+amplification to unbounded length through a pipe pair in <code>kernel.lua:166+</code>. <strong>It is not
+read-only; it writes.</strong> The question is coverage of 14.00, and the offset layout answers it more
+precisely than the table of supported versions does.</p>
+<p><strong>The read/write path does not depend on runtime discovery at all. It depends on offsets that are
+hardcoded platform-wide.</strong> In <code>get_ps5_kernel_offset</code> (<code>kernel_offset.lua:333-381</code>) the
+per-version lookup runs inside a loop, and the structural offsets are assigned outside that loop,
+unconditionally:</p>
+<pre><code class="language-lua">for fw_list, offsets in pairs(ps5_kernel_offset_list) do
+    if check_fw == FW_VERSION then kernel_offset = offsets ... end
+end
+-- static structure offsets  (outside the loop, always)
+kernel_offset.PROC_FD        = 0x48
+kernel_offset.PROC_PID       = 0xbc
+kernel_offset.PROC_VM_SPACE  = 0x200
+kernel_offset.FILEDESC_OFILES= 0x8
+kernel_offset.SIZEOF_OFILES  = 0x30
+kernel_offset.PMAP_CR3       = 0x28
+kernel_offset.SO_PCB         = 0x18
+kernel_offset.INPCB_PKTOPTS  = 0x120
+kernel_offset.PROC_COMM      = -1   -- resolved at runtime
+kernel_offset.PROC_SYSENT    = -1   -- resolved at runtime
+kernel_offset.VMSPACE_VM_PMAP= -1   -- resolved at runtime
+kernel_offset.VMSPACE_VM_VMID= -1   -- resolved at runtime
+</code></pre>
+<p><strong>How often does the per-firmware table overwrite a structural offset? Across all 48 PS5 firmware
+entries, from 1.00 to 10.01: zero times, for every one of them.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Structural offset</th>
+<th>Overwrites in the 48-version PS5 table</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SO_PCB</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>INPCB_PKTOPTS</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>SIZEOF_OFILES</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>FILEDESC_OFILES</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>PMAP_CR3</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>PROC_FD</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>PROC_PID</code></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>PROC_VM_SPACE</code></td>
+<td><strong>0</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What the per-version table actually holds is a different kind of thing:</strong> <code>DATA_BASE_ALLPROC</code>,
+<code>DATA_BASE_DATA_CAVE</code>, <code>DATA_BASE_DYNAMIC</code>, <code>DATA_BASE_GVMSPACE</code>, <code>DATA_BASE_KERNEL_PMAP_STORE</code>,
+<code>DATA_BASE_ROOTVNODE</code>, <code>DATA_BASE_SECURITY_FLAGS</code>, <code>DATA_SIZE</code>, <code>PMAP_STORE_DMPDPI</code>,
+<code>PMAP_STORE_DMPML4I</code>, <code>PMAP_STORE_PML4PML4I</code>. <strong>Those are addresses, where things sit in kernel
+data. The structural offsets are layout, how the structs are built. The separation is clean: the
+per-firmware table carries addresses; struct layout is hardcoded and never varies per firmware.
+Forty-eight versions of evidence that the author treats layout as a platform constant. If it
+varied by firmware, it would be in the table.</strong> <strong>Coverage of the target is still absent from
+both lists: the PS5 list tops out at 10.01 and the PS4 list at 12.02, with no 13.xx and no 14.xx
+entry in either, and the kernel patches bundled with the loader are PS4-only.</strong> What the analysis
+shows is that this absence does not reach the read/write path, because that path was never
+per-firmware.</p>
+<p><strong>The primitive also never touches page-table walking.</strong> <code>copyout</code> and <code>copyin</code> are built as
+pipe-plus-pipemap tricks on top of <code>ipv6_kwrite</code>, with no page walk, no <code>PMAP_STORE_*</code> and no
+<code>DATA_BASE_*</code> in the path. <strong>The only consumer of <code>DATA_BASE_*</code> outside the table is <code>gpu.lua</code>,
+which is GPU-only.</strong></p>
+<p><strong>The initialisation order settles the dependency question outright.</strong> In <code>initialize_kernel_rw</code>
+(<code>kernel.lua:327-348</code>):</p>
+<pre><code class="language-lua">kernel.copyout      = ipv6_kernel_rw.copyout      -- wired BEFORE
+kernel.copyin       = ipv6_kernel_rw.copyin
+kernel.read_buffer  = ipv6_kernel_rw.read_buffer
+kernel.write_buffer = ipv6_kernel_rw.write_buffer
+kernel.rw_initialized = true
+update_kernel_offsets()   -- if this throws, the primitive is already working
+</code></pre>
+<p><strong>Discovery runs after the primitive is wired. A discovery failure does not kill kernel read/write;
+it leaves the primitive functioning and raises an exception.</strong> If the exception goes unhandled the
+init aborts, but the primitive underneath remains valid. <strong>That distinction matters for reading a
+test result: a discovery failure and a primitive failure are different events, and this ordering is
+what separates them.</strong></p>
+<p><strong>Confidence on 14.00, separated by component rather than given as one number.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Depends on</th>
+<th>Confidence on 14.00</th>
+<th>Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The <code>ipv6_kernel_rw</code> primitive</td>
+<td>hardcoded platform-wide offsets</td>
+<td><strong>~85-90%</strong></td>
+<td>48 firmware versions with no layout variation ever; core socket, inpcb and filedesc structs Sony does not reshuffle casually</td>
+</tr>
+<tr>
+<td>Structural discovery (<code>proc</code>, <code>pmap</code>)</td>
+<td>runtime pattern matching</td>
+<td><strong>~60-75%</strong></td>
+<td><code>PROC_COMM</code> robust by design; <code>VMSPACE_VM_VMID</code> weak, any small dword matches; <strong>not testable against the available dump</strong></td>
+</tr>
+<tr>
+<td>The exploit payload producing the <code>kernel_rw</code> state</td>
+<td>outside the loader entirely</td>
+<td><strong>the real risk</strong></td>
+<td>jailbreak proven only to PS5 12.70; 13.x requested and unsupported; 14.00 never reached</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The point that reframes the whole test: the loader does not produce the <code>kernel_rw</code> state, it
+consumes it.</strong> <code>kernel.lua:329</code> is a read, <code>local state = storage.get("kernel_rw")</code>, and no file
+in the save data performs a <code>storage.set</code> of that key. <strong>The state is written by the exploit
+payload that runs before the loader.</strong> <code>main.lua:249</code> says so directly: <em>"init kernel r/w class if
+exploit state exists"</em>. <strong>So "Test 2 works on 14.00" reduces to "the exploit payload works on
+14.00". The boundary is no longer offset coverage; it is whether an exploit payload holds on a
+firmware it has never been run against.</strong></p>
+<p><strong>A limitation on this analysis, stated with it.</strong> There is no decrypted 14.00 kernel image, for
+the L1 and Titania reason given in §12.1. <strong>The patterns cannot be checked against 14.00, and it
+cannot be confirmed that <code>INPCB_PKTOPTS = 0x120</code> is correct there. The argument is one of design
+coherence across 48 versions, not of direct observation on 14.00.</strong> The 13.60 dump does not help
+either: it is the static kernel image, and the heap is not in it, so the <code>struct proc</code> instances
+that discovery searches for do not exist in the file. <strong>Testing that path would need a live heap
+dump, which requires the kernel read/write that is being sought. The circle closes only on the
+device.</strong></p>
+<p><strong>What the analysis does change is where the risk sits, and that is worth more than the coverage
+number.</strong> <strong>The robust part is robust by construction. The risk is concentrated in the exploit
+payload, not in the offsets.</strong></p>
 <p><strong>Current state.</strong> Two saves are built and verified on disk. <strong>Test 1</strong> carries the foothold and is
 expected to report Lua injection success. <strong>Test 2</strong> carries the complete loader: <code>inject.iet</code>
 pointing at an absolute <code>/savedata0/main.lua</code>, <code>main.lua</code> opening the TCP listener, <code>kernel.lua</code>
