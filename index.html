@@ -102,7 +102,10 @@ h1 code{background:none;border:none;color:var(--blue-d);padding:0;font-size:.94e
 <nav id="toc"><p class="toctitle">Contents</p><div class="toc">
 <ul>
 <li><a href="#abstract">Abstract</a></li>
-<li><a href="#1-introduction">1. Introduction</a></li>
+<li><a href="#1-introduction">1. Introduction</a><ul>
+<li><a href="#11-what-is-established-on-device">1.1 What is established on device</a></li>
+</ul>
+</li>
 <li><a href="#2-target-and-entry-vehicle">2. Target and entry vehicle</a><ul>
 <li><a href="#21-the-console">2.1 The console</a></li>
 <li><a href="#22-getting-arbitrary-javascript-into-the-guide">2.2 Getting arbitrary JavaScript into the guide</a></li>
@@ -171,8 +174,10 @@ h1 code{background:none;border:none;color:var(--blue-d);padding:0;font-size:.94e
 <h2 id="abstract">Abstract</h2>
 <p>This note records what was found, and how, during a two-day offensive characterisation of
 PlayStation 5 firmware 14.00 reached through the system User's Guide browser. Five userland
-primitives were confirmed on device: a re-entrant <code>HTMLCanvasElement.getContext()</code>
-use-after-free with bidirectional read/write over the reclaimed object, an independent
+primitives were confirmed on device (§1.1). <strong>CVE-2026-43720 is present on 14.00 and its
+re-entrancy is unguarded on this build</strong> — the trigger returns distinct inner/outer
+wrappers (<code>same=false</code>) — and the reclaimed object yields a <strong>bidirectional read/write
+proven in both directions as separate assertions</strong>, alongside an independent
 <code>TransformStream</code> iterator confusion, a bounded heap-pointer disclosure through <code>FontFace</code>
 reclamation, a WebProcess ROP frame reaching six controlled system-call arguments, and a hard
 map of the Web APIs the guide sandbox exposes. The kernel-side question — whether the <code>oid_kind</code>
@@ -249,6 +254,60 @@ does not make the kernel copy attacker bytes anywhere.</p>
 <p>Claims that could not be placed in the first three rows are stated as unresolved rather than
 smoothed over. Several earlier conclusions of this engagement were retracted mid-flight; those
 retractions are in §7.5 rather than quietly deleted.</p>
+<h3 id="11-what-is-established-on-device">1.1 What is established on device</h3>
+<p>Before the kernel result, it is worth stating plainly what this engagement <em>has</em>, because the
+userland side is not folklore and does not depend on the kernel question at all. Three things
+were confirmed live on the 14.00 console, and each carries its raw output rather than a summary.</p>
+<p><strong>CVE-2026-43720 is present and its re-entrancy is unguarded on this build.</strong> The trigger probe
+fired the <code>getContext()</code> getter re-entrantly and got back two distinct wrapper objects:</p>
+<pre><code>TRIGGER   getter=1  inner=true  outer=true  same=false
+note: &quot;distinct inner/outer wrappers - reentrancy NOT guarded on this build&quot;
+outcome: VULNERABLE
+</code></pre>
+<p><strong>[device]</strong> The <code>same=false</code> is the whole enabling condition. On a build where re-entrancy is
+guarded, the inner and outer calls return the same wrapper and there is no window. Here they do
+not, and the window exists.</p>
+<p><strong>The reclaimed object gives a bidirectional read/write, in both directions, proven separately.</strong>
+This is the load-bearing result of the userland side:</p>
+<pre><code>SPRAYED   n=80
+WRITE     ok=true  a=99.001
+CHANNEL   match=true  a=11.110011
+ALIAS     idx=3
+REVERSE   bidirectional=true
+outcome: VULNERABLE
+detail: {sprayed: 80, channel: true, write_ok: true, alias_idx: 3,
+         bidirectional: true, prop_alias: true}
+</code></pre>
+<p><strong>[device]</strong> Two directions were tested as separate assertions, not inferred from one. <code>WRITE</code>
+carries a value in through the public setter and <code>CHANNEL</code> confirms it landed with a different
+value (<code>99.001</code> written, <code>11.110011</code> read back through the alias — the alias is a distinct
+object, not a mirror of the writer). <code>REVERSE</code> then proves the opposite direction independently.
+<code>prop_alias: true</code> records that the aliasing holds through property access, not only through the
+method surface.</p>
+<p><strong>A second, orthogonal confusion exists at the iterator level.</strong> <code>ntfusion-iterator-confusion</code>
+returns <code>CONFUSED</code> with a differential inside it: a control-conforming iterator does not throw
+where a plain object does.</p>
+<pre><code>variants: [ {label: &quot;control-conforming&quot;, threw: false, verdict: &quot;no-throw&quot;},
+            {label: &quot;plain-object&quot;,       threw: true,  ctor: &quot;TypeError&quot;}, ... ]
+outcome: CONFUSED
+</code></pre>
+<p><strong>[device]</strong> This is reported as a <strong>reachability gate, not a primitive</strong> — see §3.4. It confirms
+a confusion exists but does not by itself yield a read or a write.</p>
+<p><strong>What the chain currently is, stated exactly.</strong> Re-entrant <code>getContext()</code> → distinct inner/outer
+wrapper → same-type reclaim of the freed slot → bidirectional read/write over the reclaimed
+object. <strong>Every link in that chain is confirmed on device.</strong> What the chain does <em>not</em> yet reach
+is an address: the primitive reads and writes a window it cannot locate, which is the code-leak
+gap of §6.1 and not a defect in the chain.</p>
+<p><strong>Where the novelty actually sits, and what backs it.</strong> The userland primitives are confirmations
+of a known CVE on a new firmware — valuable as a device measurement, not as a novel finding.
+<strong>The novel contribution is the kernel characterisation in §4: that the <code>oid_kind</code> swap is a
+permission-check bypass rather than a type confusion.</strong> That claim is backed by three
+independent static observations (the untouched <code>CTLTYPE</code> nibble across ten dispatch sites, the
+single moved <code>test</code>/<code>je</code> pair at a named address, and the privilege-selector constants resolving
+to 241/242) and by a novelty survey finding zero prior published characterisation of it (§8.4).
+<strong>The distinction matters for how much weight to put on each part of this note: one half is
+confirmed measurement of known things, the other half is a new reading of something everyone
+else used as a black box.</strong></p>
 <hr />
 <h2 id="2-target-and-entry-vehicle">2. Target and entry vehicle</h2>
 <h3 id="21-the-console">2.1 The console</h3>
