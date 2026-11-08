@@ -1807,8 +1807,51 @@ read. **It is the read.**
 
 **Three components, all controllable.** The gate is satisfied by handing over a real Symbol. The
 width is set by the description's length. The content is the description itself. **A primitive
-that produces a Symbol with a chosen description controls all three at once**, which is a
-stronger position than the window model suggested an hour earlier.
+that produces a Symbol with a chosen description controls all three at once.**
+
+**Controllable content is not a leak.** The three-lever model is structurally right and the third
+term needs precision: the content is **ours**, not memory that was read. Two probes establish it.
+
+**H1: the carrier's slots are not reachable through `this`.** A carrier array holding `65..80`
+kept separate from the object whose getter is invoked:
+
+```
+carrier holds        [65, 66, 67, 68, ...]
+codes@7              [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+all zero             True
+```
+
+**The getter reads zeros. The carrier's contents never arrive.**
+
+**H4: inside the getter, `this` is the receiver, not the carrier.** A carrier holding `65..80`
+against a leaked scope holding `97..112`:
+
+```
+recv === scope          True
+codes@7                 [97, 98, 99, 100, 101, 102, 103, 104,
+                         105, 106, 107, 108, 109, 110, 111, 112]
+is carrier 'A'..'P'     False
+is scope   'a'..'p'     True
+```
+
+**The values that come back are the scope's, not the carrier's. `this` inside the getter is the
+leaked receiver.**
+
+**All four forms tested are well-typed JavaScript: a string is written and the same string is read
+back.** **A leak requires reading something that was not put there.** Width: available. Content:
+available. Reading someone else's memory: not achieved. **Three levers is a controlled string,
+not a memory read.**
+
+**Where Prolapse's leak actually sat.** The leak needs the description field to point at memory
+that is not ours. That happens only if the engine treats as a Symbol an object that is not one,
+which is the type confusion, **which is exactly what the gate blocks.** So on 14.00 with the gate
+present: window yes, content yes, reading of foreign memory no.
+
+**The question, reformulated.** The wrong form was "how do I construct the description", and it is
+excluded by measurement rather than by hypothesis: H1 and H4 show the carrier cannot feed the
+description through `this`. **The question that remains is: what makes the description field of an
+object point at memory we did not write?** On 14.00 with the gate present, the answer is not in
+the carrier. **The question stays open, and it is now the right question.**
 
 **Our variant is not Prolapse's primitive, and the difference matters.** A getter returning a
 real Symbol clears the gate and yields a bounded window needing `str_len >= 23`. Prolapse's
