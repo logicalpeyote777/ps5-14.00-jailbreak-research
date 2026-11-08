@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PS5 14.00 Jailbreak Research — Morini Computers</title>
+<title>PS5 14.00 Jailbreak Research | Morini Computers</title>
 <meta name="description" content="The PS5 14.00 sysctl kind swap is a permission-check bypass, not a type confusion. CVE-2026-43720 confirmed on device.">
 <meta name="author" content="Morini Computers">
 <style>
@@ -76,7 +76,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <div class="meta"><div><span class="k">Research</span><span class="v">logicalpeyote</span></div><div><span class="k">Engagement</span><span class="v"><code>ps5-1400-kernel</code></span></div><div><span class="k">Dates</span><span class="v">2026-11-06 &rarr; 2026-11-07</span></div><div><span class="k">Target</span><span class="v">PlayStation 5 (CFI-2000), sw 14.00</span></div></div>
 <nav id="toc"><p class="toctitle">Contents</p><div class="toc">
 <ul>
-<li><a href="#part-i-what-works">Part I — What works</a><ul>
+<li><a href="#part-i-what-works">Part I : What works</a><ul>
 <li><a href="#1-introduction-new">1. Introduction [new]</a><ul>
 <li><a href="#11-what-is-established-on-device">1.1 What is established on device</a></li>
 </ul>
@@ -88,7 +88,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#24-the-kernel-image">2.4 The kernel image</a></li>
 </ul>
 </li>
-<li><a href="#3-cve-2026-43720-the-canvas-re-entrancy-already-known">3. CVE-2026-43720 — the canvas re-entrancy [already known]</a><ul>
+<li><a href="#3-cve-2026-43720-the-canvas-re-entrancy-already-known">3. CVE-2026-43720 : the canvas re-entrancy [already known]</a><ul>
 <li><a href="#31-what-the-bug-is">3.1 What the bug is</a></li>
 <li><a href="#32-how-we-exploit-it">3.2 How we exploit it</a></li>
 <li><a href="#33-what-the-primitive-gives-us-and-what-it-does-not">3.3 What the primitive gives us, and what it does not</a></li>
@@ -96,7 +96,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </li>
 <li><a href="#4-the-ntfusion-iterator-confusion-new">4. The ntfusion iterator confusion [new]</a><ul>
 <li><a href="#41-what-the-bug-is">4.1 What the bug is</a></li>
-<li><a href="#42-how-we-exploit-it-and-why-we-call-it-a-gate-not-a-primitive">4.2 How we exploit it — and why we call it a gate, not a primitive</a></li>
+<li><a href="#42-how-we-exploit-it-and-why-we-call-it-a-gate-not-a-primitive">4.2 How we exploit it : and why we call it a gate, not a primitive</a></li>
 </ul>
 </li>
 <li><a href="#5-what-the-guide-sandbox-exposes-new">5. What the guide sandbox exposes [new]</a></li>
@@ -120,10 +120,10 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </li>
 </ul>
 </li>
-<li><a href="#part-ii-tested-and-proven-dead">Part II — Tested and proven dead</a><ul>
+<li><a href="#part-ii-tested-and-proven-dead">Part II : Tested and proven dead</a><ul>
 <li><a href="#9-execute-only-text-the-constraint-that-reframes-the-leak-new">9. Execute-only text: the constraint that reframes the leak [new]</a><ul>
 <li><a href="#91-what-the-constraint-does-and-does-not-close">9.1 What the constraint does and does not close</a></li>
-<li><a href="#92-the-reframe-read-the-address-not-the-code">9.2 The reframe — read the address, not the code</a></li>
+<li><a href="#92-the-reframe-read-the-address-not-the-code">9.2 The reframe : read the address, not the code</a></li>
 <li><a href="#93-the-deltas-are-family-specific-not-module-invariant">9.3 The deltas are family-specific, not module-invariant</a></li>
 </ul>
 </li>
@@ -133,17 +133,18 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#121-first-which-artifact-describes-which-firmware">12.1 First: which artifact describes which firmware</a></li>
 <li><a href="#122-two-separate-gaps-not-one">12.2 Two separate gaps, not one</a></li>
 <li><a href="#123-closed-branches-measured-absence-not-unsearched-ground">12.3 Closed branches: measured absence, not unsearched ground</a></li>
+<li><a href="#124-the-chain-as-implemented-and-the-one-primitive-that-is-missing">12.4 The chain as implemented, and the one primitive that is missing</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li><a href="#part-iii-method-related-work-conclusion">Part III — Method, related work, conclusion</a><ul>
+<li><a href="#part-iii-method-related-work-conclusion">Part III : Method, related work, conclusion</a><ul>
 <li><a href="#13-methodology-new">13. Methodology [new]</a><ul>
 <li><a href="#131-a-self-driving-console-harness">13.1 A self-driving console harness</a></li>
 <li><a href="#132-differential-baseline-against-patched-chromium">13.2 Differential baseline against patched Chromium</a></li>
 <li><a href="#133-static-analysis-without-symbols">13.3 Static analysis without symbols</a></li>
 <li><a href="#134-vacuous-negatives">13.4 Vacuous negatives</a></li>
-<li><a href="#135-retractions">13.5 Retractions</a></li>
+<li><a href="#135-dead-paths-measured-negatives">13.5 Dead paths: measured negatives</a></li>
 <li><a href="#136-cve-existence-by-direct-query">13.6 CVE existence by direct query</a></li>
 <li><a href="#137-fuzzing-the-live-kernel-from-the-browser-proposed-not-executed">13.7 Fuzzing the live kernel from the browser (proposed, not executed)</a></li>
 <li><a href="#138-the-patcher-that-did-not-patch-a-silent-false-negative-at-scale">13.8 The patcher that did not patch: a silent false negative at scale</a></li>
@@ -154,6 +155,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#142-relapse">14.2 Relapse</a></li>
 <li><a href="#143-upstream-freebsd">14.3 Upstream FreeBSD</a></li>
 <li><a href="#144-novelty-verdict">14.4 Novelty verdict</a></li>
+<li><a href="#145-nobody-has-written-the-1400-answer">14.5 Nobody has written the 14.00 answer</a></li>
 </ul>
 </li>
 <li><a href="#15-conclusion-new">15. Conclusion [new]</a></li>
@@ -163,19 +165,19 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </ul>
 </div>
 </nav>
-<p><strong>Research:</strong> logicalpeyote — Morini Computers
+<p><strong>Research:</strong> logicalpeyote, Morini Computers
 <strong>Engagement:</strong> <code>ps5-1400-kernel</code>
 <strong>Dates:</strong> 2026-11-06 → 2026-11-07
 <strong>Target:</strong> PlayStation 5 (CFI-2000), system software 14.00</p>
 <hr />
-<h1 id="part-i-what-works">Part I — What works</h1>
+<h1 id="part-i-what-works">Part I : What works</h1>
 <p><em>The chain that is confirmed on device: entry, the two WebKit confusions, the read/write primitive, the syscall path, and the kernel mechanism we characterised.</em></p>
 <h2 id="1-introduction-new">1. Introduction <code>[new]</code></h2>
 <p>Two findings anchor this note: a set of userland primitives in the PlayStation 5 User's Guide
 browser, confirmed live on a single console, and a correction to a piece of folklore.</p>
 <p>The folklore is the <em>sysctl kind swap</em>. Since firmware 13.60 the community has carried a
 one-byte kernel write target described as "flip the sysctl <code>kind</code> field from <code>0x80048002</code>
-(read-only) to <code>0x70048002</code> (writable)" — a black box that asserts the swap makes a read-only
+(read-only) to <code>0x70048002</code> (writable)" is a black box that asserts the swap makes a read-only
 sysctl writable, used that way in published variant analyses with no account of <em>why</em> the
 kernel would agree. This note opens it. From a live kernel dump with no symbol table, the swap
 was traced from the <code>sysctl</code> entry through the permission-check chain to the exact instruction
@@ -187,11 +189,11 @@ whose flags it changes, and three things came out that the folklore does not cap
 <li><strong>What changes is one branch.</strong> A single <code>test eax, 0x10000000</code> / <code>je</code> pair at
    <code>0xffffffff9e947f49</code> decides whether the kernel runs a privilege check at all.</li>
 <li><strong>The skipped check is a privilege check, not a MAC check.</strong> Its selector constant
-   resolves to 241 and 242 — upstream FreeBSD's <code>PRIV_SYSCTL_WRITE</code> and
+   resolves to 241 and 242, upstream FreeBSD's <code>PRIV_SYSCTL_WRITE</code> and
    <code>PRIV_SYSCTL_WRITEJAIL</code>. The skipped bit is <code>CTLFLAG_ANYBODY</code>.</li>
 </ol>
 <p>The consequence is narrower than the folklore implies: the swap removes an early exit and does
-not open a new path — it makes an OID <em>permitted</em> to be written by an unprivileged caller, but
+not open a new path: it makes an OID <em>permitted</em> to be written by an unprivileged caller, but
 does not make the kernel copy attacker bytes anywhere.</p>
 <p>Everything below is tagged with its evidence class:</p>
 <table>
@@ -225,8 +227,7 @@ does not make the kernel copy attacker bytes anywhere.</p>
 </tbody>
 </table>
 <p>Claims that could not be placed in the first three rows are stated as unresolved rather than
-smoothed over. Several earlier conclusions of this engagement were retracted mid-flight; those
-retractions are in §13.5 rather than quietly deleted.</p>
+smoothed over.</p>
 <h3 id="11-what-is-established-on-device">1.1 What is established on device</h3>
 <p>Before the kernel result, it is worth stating plainly what this engagement <em>has</em>, because the
 userland side is not folklore and does not depend on the kernel question at all. Three things
@@ -253,7 +254,7 @@ detail: {sprayed: 80, channel: true, write_ok: true, alias_idx: 3,
 </code></pre>
 <p><strong>[device]</strong> Two directions were tested as separate assertions, not inferred from one. <code>WRITE</code>
 carries a value in through the public setter and <code>CHANNEL</code> confirms it landed with a different
-value (<code>99.001</code> written, <code>11.110011</code> read back through the alias — the alias is a distinct
+value (<code>99.001</code> written, <code>11.110011</code> read back through the alias; the alias is a distinct
 object, not a mirror of the writer). <code>REVERSE</code> then proves the opposite direction independently.
 <code>prop_alias: true</code> records that the aliasing holds through property access, not only through the
 method surface.</p>
@@ -264,7 +265,7 @@ where a plain object does.</p>
             {label: &quot;plain-object&quot;,       threw: true,  ctor: &quot;TypeError&quot;}, ... ]
 outcome: CONFUSED
 </code></pre>
-<p><strong>[device]</strong> This is reported as a <strong>reachability gate, not a primitive</strong> — see §4. It confirms
+<p><strong>[device]</strong> This is reported as a <strong>reachability gate, not a primitive</strong>: see §4. It confirms
 a confusion exists but does not by itself yield a read or a write.</p>
 <p><strong>What the chain currently is, stated exactly.</strong> Re-entrant <code>getContext()</code> → distinct inner/outer
 wrapper → same-type reclaim of the freed slot → bidirectional read/write over the reclaimed
@@ -272,7 +273,7 @@ object. <strong>Every link in that chain is confirmed on device.</strong> What t
 is an address: the primitive reads and writes a window it cannot locate, which is the code-leak
 gap of §12.2 and not a defect in the chain.</p>
 <p><strong>Where the novelty actually sits, and what backs it.</strong> The userland primitives are confirmations
-of a known CVE on a new firmware — valuable as a device measurement, not as a novel finding.
+of a known CVE on a new firmware, valuable as a device measurement, not as a novel finding.
 <strong>The novel contribution is the kernel characterisation in §4: that the <code>oid_kind</code> swap is a
 permission-check bypass rather than a type confusion.</strong> That claim is backed by three
 independent static observations (the untouched <code>CTLTYPE</code> nibble across ten dispatch sites, the
@@ -288,7 +289,7 @@ else used as a black box.</strong></p>
 <code>192.168.1.86</code> on a flat home network. The user-agent reported by the target browser:</p>
 <pre><code>Mozilla/5.0 (PlayStation; PlayStation 5/14.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15
 </code></pre>
-<p><strong>[device]</strong> — captured from the request headers arriving at the redirect server during the
+<p><strong>[device]</strong>: captured from the request headers arriving at the redirect server during the
 first live run (<code>evidence/ondevice_1400_confirmed.md</code>, 2026-11-07 08:06 UTC).</p>
 <h3 id="22-getting-arbitrary-javascript-into-the-guide">2.2 Getting arbitrary JavaScript into the guide</h3>
 <p>The User's Guide is an embedded WebKit WebProcess pinned to <code>manuals.playstation.net</code>; the entry
@@ -299,7 +300,7 @@ assumed:</p>
 chill.servebeer.com      -&gt;  192.168.1.70   enabled
 </code></pre>
 <p><strong>[device]</strong> Note what is <em>absent</em>: no <code>ps5.np.playstation.net</code> entry. Upstream's 14.10 notes
-identify that host as the guide <strong>app shell</strong> — the domain whose response carries the WebView —
+identify that host as the guide <strong>app shell</strong>: the domain whose response carries the WebView,
 versus <code>manuals.playstation.net</code>, which carries only content. The shell rewrite was staged but
 never applied: hijacking it can break the guide outright, and the content path was already
 producing results. Whether the shell path yields a less constrained WebProcess is
@@ -322,8 +323,8 @@ sha256  c3f745e25dc25ee7afef89eb418b295b6334bbefe8aa17e6886483c35d78cddd
 format  raw, not ELF, no symbol table
 file_offset = virtual_address - 0xffffffff9e3f0000
 </code></pre>
-<p><strong>[static]</strong> The mapping is valid for the static image only; it broke exactly once,
-instructively (§13.5). Tooling: capstone 5.0.7 x86-64 <code>detail=True</code>, cross-checked with
+<p><strong>[static]</strong> The mapping is valid for the static image only; live runtime pointers are
+outside its domain (§13.5). Tooling: capstone 5.0.7 x86-64 <code>detail=True</code>, cross-checked with
 <code>objdump -D -b binary -m i386:x86-64 --adjust-vma=0xffffffff9e3f0000</code>. Two environment traps
 cost time and are worth recording: the host venv's <code>bin/python</code> points at 3.13 while
 <code>site-packages</code> holds 3.12 packages, so capstone needs an explicit
@@ -331,7 +332,7 @@ cost time and are worth recording: the host venv's <code>bin/python</code> point
 <code>/tmp/inspect.py</code> shadows the standard library's <code>inspect</code> module and breaks the capstone
 import with an error that does not mention either file.</p>
 <hr />
-<h2 id="3-cve-2026-43720-the-canvas-re-entrancy-already-known">3. CVE-2026-43720 — the canvas re-entrancy <code>[already known]</code></h2>
+<h2 id="3-cve-2026-43720-the-canvas-re-entrancy-already-known">3. CVE-2026-43720 : the canvas re-entrancy <code>[already known]</code></h2>
 <h3 id="31-what-the-bug-is">3.1 What the bug is</h3>
 <p><code>HTMLCanvasElement.getContext()</code> is not re-entrancy-safe. Calling it a second time from inside
 the settings-object conversion of a first call causes the first call's context object to be
@@ -342,7 +343,7 @@ their probe <code>p553</code> on 2026-10-26, with the writable surface being the
 matrix plus seven numeric properties over the 768-byte context. <strong>14.00 (2026-09-16) predates
 14.10 (2026-10-01), so the finding transfers</strong> <strong>[upstream]</strong>.</p>
 <p>What was not known before this engagement, and what we measured, is whether the bug is <em>live and
-usable</em> on 14.00 specifically — as opposed to present in the source and unreachable in the
+usable</em> on 14.00 specifically, as opposed to present in the source and unreachable in the
 build. That is a different question and it needed a device.</p>
 <h3 id="32-how-we-exploit-it">3.2 How we exploit it</h3>
 <p>Three probes, run in sequence, each answering a different question <strong>[device]</strong>:</p>
@@ -357,17 +358,17 @@ CVE-2026-43720-rw        -&gt; VULNERABLE      sprayed: 80
                                              prop_alias: true
                                              alias_idx: 3
 </code></pre>
-<p><strong>Step 1 — prove the window exists.</strong> The trigger calls <code>getContext()</code> re-entrantly and compares
+<p><strong>Step 1: prove the window exists.</strong> The trigger calls <code>getContext()</code> re-entrantly and compares
 the two handles. <code>same: false</code> means they are distinct objects, so the outer one can be freed
 while the inner reference survives. <code>getter: 1</code> is the load-bearing field: <strong>the settings getter
 is not guarded against re-entrancy on this build.</strong> On a build where it is guarded, both calls
 return the same wrapper and there is no window at all.</p>
-<p><strong>Step 2 — prove the window is not self-cleaning.</strong> The bitmap-trigger variant checks what
+<p><strong>Step 2: prove the window is not self-cleaning.</strong> The bitmap-trigger variant checks what
 happens to the <em>other</em> context after the re-entry. <code>other_unchanged: true</code> with
 <code>reentrant: true</code> says the second context is a genuinely separate object that the engine did not
 silently reconcile. This rules out the benign reading in which re-entrancy returns a fresh object
 and the old one stays valid.</p>
-<p><strong>Step 3 — prove we can read and write through it.</strong> A spray of 80 one-by-one canvases reclaims
+<p><strong>Step 3: prove we can read and write through it.</strong> A spray of 80 one-by-one canvases reclaims
 the freed slot; <code>alias_idx: 3</code> identifies which spray element took it. Then two directions are
 asserted <strong>separately</strong>, not inferred from one another:</p>
 <pre><code>WRITE   ok=true  a=99.001        value pushed through the public setter
@@ -375,14 +376,14 @@ CHANNEL match=true  a=11.110011  value read back through the alias (a different 
 REVERSE bidirectional=true       the opposite direction, tested on its own
 </code></pre>
 <p><code>prop_alias: true</code> records that the aliasing holds through <strong>property access</strong>, not only through
-the method surface — which is what makes it usable as a search tool rather than only as a
+the method surface, which is what makes it usable as a search tool rather than only as a
 modification tool.</p>
 <h3 id="33-what-the-primitive-gives-us-and-what-it-does-not">3.3 What the primitive gives us, and what it does not</h3>
 <p><strong>It gives us</strong> a live, bidirectional read/write window over a reclaimed 768-byte object, reached
 from ordinary DOM calls, with no JIT and no WebAssembly required.</p>
 <p><strong>It does not give us the address of that object.</strong> The window is positioned relative to
 something we control, but its absolute location in memory is unknown, and the value channel is
-float64 — which is where §10 comes in. <strong>This is the single thing standing between a working
+float64, which is where §10 comes in. <strong>This is the single thing standing between a working
 userland primitive and a usable one, and it is the same wall upstream reports.</strong></p>
 <p>Memory was bounded deliberately: 1×1 canvases, a spray of 80, under the ~100 MB ceiling that
 killed an earlier plan.</p>
@@ -395,7 +396,7 @@ validate it.</p>
 <p>This is independent of the canvas family: different entry point, different object family,
 different detection signal. <strong>It is a second WebKit confusion on 14.00, not a second symptom of
 the first one.</strong></p>
-<h3 id="42-how-we-exploit-it-and-why-we-call-it-a-gate-not-a-primitive">4.2 How we exploit it — and why we call it a gate, not a primitive</h3>
+<h3 id="42-how-we-exploit-it-and-why-we-call-it-a-gate-not-a-primitive">4.2 How we exploit it : and why we call it a gate, not a primitive</h3>
 <pre><code>ntfusion-iterator-confusion -&gt; CONFUSED
                               control_clean: true
                               confused_variants: 4
@@ -426,26 +427,26 @@ exploitability from a throw."</em></p>
 </tr>
 <tr>
 <td>Confused object produced and retained</td>
-<td><strong>DONE — 3/3 retained and readable</strong> <strong>[device]</strong></td>
+<td><strong>DONE: 3/3 retained and readable</strong> <strong>[device]</strong></td>
 </tr>
 <tr>
 <td>Pointer scan on retained objects</td>
-<td><strong>DONE — 6 objects scanned, 0 pointer-shaped</strong> <strong>[device]</strong></td>
+<td><strong>DONE: 6 objects scanned, 0 pointer-shaped</strong> <strong>[device]</strong></td>
 </tr>
 <tr>
 <td>Engine-side object captured and scanned</td>
-<td><strong>DONE — stream/writable/readable/writer, all <code>ownProps=0</code>, 0 pointer-shaped</strong> <strong>[device]</strong></td>
+<td><strong>DONE: stream/writable/readable/writer, all <code>ownProps=0</code>, 0 pointer-shaped</strong> <strong>[device]</strong></td>
 </tr>
 <tr>
 <td>Deref → arbitrary read</td>
-<td><strong>not reachable — see below</strong></td>
+<td><strong>not reachable: see below</strong></td>
 </tr>
 </tbody>
 </table>
 <p>Two follow-up probes were run against this finding. Neither observed the guard and the access in
 the right order, but the second answers the question indirectly and more strongly than the error
 message did.</p>
-<p><strong>Probe 1 — <code>retain-confused-object-1400</code>:</strong></p>
+<p><strong>Probe 1, <code>retain-confused-object-1400</code>:</strong></p>
 <pre><code>BASE     f64-&gt;u8 visible=true bytes0=0,0,0,0,0,0,248,63
 CONF     threw=TypeError msg=Type error
 RETAIN   yielded=3 iters=2 stream=no thrown=yes
@@ -453,7 +454,7 @@ SCAN     objects-scanned=6 ptrlike=0   FREQ {}   CANDS []
 ALIVE    retained-and-readable=3/3
 VERDICT  OBJECT-RETAINED ptrlike=0
 </code></pre>
-<p><strong>Probe 2 — <code>engine-object-1400</code></strong>, built deliberately to capture the <em>engine's</em> object rather
+<p><strong>Probe 2, <code>engine-object-1400</code></strong>, built deliberately to capture the <em>engine's</em> object rather
 than our own inputs:</p>
 <pre><code>BASE     f64-&gt;u8=true b0..7=0,0,0,0,0,0,248,63
 BUILD    stream created with default (valid) ctor
@@ -465,18 +466,18 @@ WRITER   writer acquired
 SUMMARY  captured=4 ptrlike=0
 VERDICT  NO-ENGINE-POINTER (baseline alive, so this is a real negative)
 </code></pre>
-<p><strong>Both probes carried a live baseline of the read channel</strong> — the <code>BASE</code> line in each shows the
+<p><strong>Both probes carried a live baseline of the read channel</strong>: the <code>BASE</code> line in each shows the
 f64→u8 channel visible before any confusion was introduced. <strong>That is what makes the zeros real
 negatives rather than vacuous ones.</strong> A scan that finds nothing on a channel that cannot read is
 worthless; a scan that finds nothing on a channel demonstrated working one line earlier is a
 measurement.</p>
-<p><strong>The result that matters is not the pointer zero — it is <code>ownProps=0</code>.</strong> <code>stream</code>,
+<p><strong>The result that matters is not the pointer zero. It is <code>ownProps=0</code>.</strong> <code>stream</code>,
 <code>stream.writable</code>, <code>stream.readable</code> and the writer all return <strong>zero observable properties</strong>
 under <code>getOwnPropertyNames</code>. This corroborates the §5 census independently
 (<code>textarea ownProps=0 div ownProps=0 canvas ownProps=0</code>); it now holds for engine objects, not
 just DOM nodes. <strong>The pointers live in the C++ object and JavaScript does not expose them.</strong> The
 only properties observed anywhere in either probe were our own <code>{v: i}</code> inputs.</p>
-<p><strong>On the guard-versus-access ordering:</strong> in probe 2 the confusion <strong>did not throw</strong> —
+<p><strong>On the guard-versus-access ordering:</strong> in probe 2 the confusion <strong>did not throw</strong>:
 <code>ReadableStream with confused iterator built ok</code>, <code>writer acquired</code>, with zero pointers lost and
 zero crashes. That is <strong>consistent with the guard preceding the access, but it does not
 demonstrate the order.</strong> Nothing here proves the guard runs first; it shows that when the
@@ -487,7 +488,7 @@ different claims and only the second one is supported.</p>
 <p><strong>And the circle is worth naming explicitly, because it is the whole finding.</strong> Reading the
 confused object would require the bidirectional primitive. The bidirectional primitive requires
 the address of the confused object. That address is exactly the leak we do not have. <strong>The bug
-cannot be exploited with the capability that the bug would provide</strong> — it is closed by the same
+cannot be exploited with the capability that the bug would provide</strong>: it is closed by the same
 missing piece that closes every other route in §12.3, arriving from a direction we did not
 expect.</p>
 <p><strong>No CVE is claimed for this bug, by decision.</strong> The impact is not demonstrated and is not being
@@ -511,27 +512,27 @@ anything else on the queue was runnable at all.</p>
 <tr>
 <td><code>canvas 2d</code></td>
 <td><strong>yes</strong></td>
-<td>— (<code>ctx-ok</code>)</td>
+<td>(<code>ctx-ok</code>)</td>
 </tr>
 <tr>
 <td><code>messageChannel</code></td>
 <td><strong>yes</strong></td>
-<td>— (<code>ok</code>)</td>
+<td>(<code>ok</code>)</td>
 </tr>
 <tr>
 <td><code>localStorage</code></td>
 <td><strong>yes</strong></td>
-<td>— (<code>ok</code>)</td>
+<td>(<code>ok</code>)</td>
 </tr>
 <tr>
 <td><code>fetch</code></td>
 <td><strong>yes</strong></td>
-<td>— (<code>function</code>)</td>
+<td>(<code>function</code>)</td>
 </tr>
 <tr>
 <td><code>WebSocket</code></td>
 <td><strong>yes</strong></td>
-<td>— (<code>function</code>)</td>
+<td>(<code>function</code>)</td>
 </tr>
 <tr>
 <td><code>webgl</code></td>
@@ -561,11 +562,11 @@ anything else on the queue was runnable at all.</p>
 </tbody>
 </table>
 <p>The worker result deserves emphasis over its own row: <code>SecurityError</code> is neither "not
-implemented" nor "constructor threw" — it is a policy refusal. The guide WebProcess is denied
+implemented" nor "constructor threw": it is a policy refusal. The guide WebProcess is denied
 worker creation outright, removing an entire class of heap-grooming and cross-thread race
 primitives before they are tried. <code>SharedArrayBuffer</code> is likewise absent, making
 <code>Atomics.waitAsync</code> decorative: no SAB-based grooming, no cross-thread race surface.
-<strong>[device]</strong> <code>structuredClone</code>, however, <strong>is present</strong> — worth flagging precisely because the
+<strong>[device]</strong> <code>structuredClone</code>, however, <strong>is present</strong>: worth flagging precisely because the
 published Relapse WebKit stage is built on a structured-clone pool mismatch: the primitive
 exists on 14.00, the mismatch does not (§11). <strong>[device]</strong></p>
 <h2 id="6-reaching-a-system-call-from-the-browser-new">6. Reaching a system call from the browser <code>[new]</code></h2>
@@ -648,17 +649,17 @@ base <code>0xffffffffa095a6e0</code>; for <code>kern.osreldate</code>, <code>0xf
 <tr>
 <td><code>+0x40</code></td>
 <td><code>oid_fmt</code></td>
-<td>—</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>+0x4c</code></td>
 <td>refcount</td>
-<td>—</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>+0x50</code></td>
 <td><code>oid_descr</code></td>
-<td>—</td>
+<td>n/a</td>
 </tr>
 </tbody>
 </table>
@@ -673,7 +674,7 @@ XOR           =  0xF0000000
 little-endian :  02 80 04 80  -&gt;  02 80 04 70
 differing byte index: 3
 </code></pre>
-<p><strong>[static]</strong> Verified by simulation on five OIDs — <code>osrevision</code>, <code>osreldate</code>, <code>ncpu</code>,
+<p><strong>[static]</strong> Verified by simulation on five OIDs: <code>osrevision</code>, <code>osreldate</code>, <code>ncpu</code>,
 <code>pagesize</code>, <code>byteorder</code>. One byte, at <code>oid_kind + 3</code>.</p>
 <h3 id="73-the-type-field-is-untouched">7.3 The type field is untouched</h3>
 <p><code>CTLTYPE</code> is <code>kind &amp; 0xf</code>. <strong>[upstream]</strong> <code>sys/sys/sysctl.h</code>: <code>#define CTLTYPE 0xf</code>,
@@ -704,8 +705,8 @@ differing byte index: 3
 </table>
 <p>The type is <code>2</code> before and after. A scan of every reader of <code>[reg + 0x1c]</code> in the sysctl zone
 found 17 sites; the masks applied immediately after the read were <code>0xf</code> ×10 (none of them a
-swapped bit), <code>0x81000</code> ×1, <code>0x2000000</code> ×1, <code>0x1000000</code> ×1, and <strong><code>0x10000000</code> ×1 — the
-only one that touches a swapped bit</strong>.</p>
+swapped bit), <code>0x81000</code> ×1, <code>0x2000000</code> ×1, <code>0x1000000</code> ×1, and <strong><code>0x10000000</code> ×1</strong>, the
+only one that touches a swapped bit**.</p>
 <p><strong>[static]</strong> The swap is invisible to type dispatch. It is not a type confusion.</p>
 <h3 id="74-the-one-branch-that-moves">7.4 The one branch that moves</h3>
 <pre><code>0xffffffff9e947f45   41 8b 47 1c      mov   eax, dword ptr [r15 + 0x1c]
@@ -737,7 +738,7 @@ With <code>0x80048002</code>, <code>&amp; 0x4000000 = 0</code>, so <code>cmp eax
 <pre><code class="language-c">#define PRIV_SYSCTL_WRITE      241   /* Can write sysctls. */
 #define PRIV_SYSCTL_WRITEJAIL  242   /* Can write sysctls, jail permitted. */
 </code></pre>
-<p>And the selector bit <code>0x04000000</code> is <code>CTLFLAG_PRISON</code> — "Prisoned roots can fiddle". The
+<p>And the selector bit <code>0x04000000</code> is <code>CTLFLAG_PRISON</code>: "Prisoned roots can fiddle". The
 shape matches upstream <code>sysctl_root()</code> exactly:</p>
 <pre><code class="language-c">/* Is this sysctl writable by only privileged users? */
 if (req-&gt;newptr &amp;&amp; !(oid-&gt;oid_kind &amp; CTLFLAG_ANYBODY)) {
@@ -752,7 +753,7 @@ if (req-&gt;newptr &amp;&amp; !(oid-&gt;oid_kind &amp; CTLFLAG_ANYBODY)) {
                 goto out;
 }
 </code></pre>
-<p><strong>[upstream]</strong> The bit the swap sets, <code>0x10000000</code>, is <code>CTLFLAG_ANYBODY</code> — "All users can
+<p><strong>[upstream]</strong> The bit the swap sets, <code>0x10000000</code>, is <code>CTLFLAG_ANYBODY</code>: "All users can
 set this var". The swap sets it. The guard <code>!(oid_kind &amp; CTLFLAG_ANYBODY)</code> becomes false.
 <code>priv_check</code> is not called.</p>
 <p>This is the answer to the question the folklore never asked. The swap does not confuse the
@@ -773,9 +774,9 @@ and the kernel's own permission logic agrees.</p>
 </code></pre>
 <p>Traced against the flag values:</p>
 <ul>
-<li><strong>With <code>0x80048002</code></strong> — gate 1 <code>test 0x40000000</code> = 0 → <strong>JE → exit at
+<li><strong>With <code>0x80048002</code></strong>: gate 1 <code>test 0x40000000</code> = 0 → <strong>JE → exit at
   <code>0xffffffff9e948074</code> with <code>r13d = 1</code></strong>. The check is never interrogated.</li>
-<li><strong>With <code>0x70048002</code></strong> — gate 1 passes (<code>0x40000000</code> set), gate 2 not taken
+<li><strong>With <code>0x70048002</code></strong>: gate 1 passes (<code>0x40000000</code> set), gate 2 not taken
   (<code>0x08000000</code> clear), gate 3 <code>JNE</code> → dispatch, check skipped.</li>
 </ul>
 <p>Control-flow-graph entry counts confirm the three-way separation:</p>
@@ -807,8 +808,8 @@ and the kernel's own permission logic agrees.</p>
 </table>
 <p>The check block has exactly one entry, and the swap closes it.</p>
 <h3 id="76-the-check-denies-when-it-runs">7.6 The check denies when it runs</h3>
-<p>The check is reachable <strong>only</strong> via the bextr path — <code>jne@ed2 → bextr esi, eax, 0x414 →
-call 0xffffffff9e69a9b0 → fallthrough 0xf34 → test eax, 0x10000000 → je 0xedb</code> — that is,
+<p>The check is reachable <strong>only</strong> via the bextr path: <code>jne@ed2 → bextr esi, eax, 0x414 →
+call 0xffffffff9e69a9b0 → fallthrough 0xf34 → test eax, 0x10000000 → je 0xedb</code>; that is,
 only with <code>0x08000000</code> set and <code>0x10000000</code> clear.</p>
 <p>Following it to ground:</p>
 <pre><code>0xffffffff9eecfa30:  push rbp
@@ -863,7 +864,7 @@ xor  eax, eax
 cmp  rcx, rdx
 je   0xffffffff9efdaa21         ; ALLOW
 </code></pre>
-<p>The sentinel <code>0xffffffffa0fe6520</code> holds twenty zero bytes — an "unlabelled object". <strong>This is
+<p>The sentinel <code>0xffffffffa0fe6520</code> holds twenty zero bytes: an "unlabelled object". <strong>This is
 the single statically-unresolvable point in the whole chain</strong>, and it is worth being precise
 about why: it depends on the runtime value of <code>[[rbx] + 0x140]</code>, <strong>not on <code>kind</code></strong>. No amount
 of further static work closes it; it needs a live instance. Three claims, each separately
@@ -904,9 +905,9 @@ It is not a write primitive: it changes which branch the kernel takes, not what 
 0xffffffff9e9475dd   49 8b 0c 24        mov   rcx, qword ptr [r12]
 0xffffffff9e9475e1   48 3b 4d d8        cmp   rcx, qword ptr [rbp - 0x28]   ; stack canary
 </code></pre>
-<p><strong>[static]</strong> The lines cited in earlier notes — <code>9e947564 test rsi,rsi</code>,
+<p><strong>[static]</strong> The lines cited in earlier notes: <code>9e947564 test rsi,rsi</code>,
 <code>9e947569 mov edx,[r14]</code>, <code>9e947587 lea rsi,[rbp-0x2c]</code>, <code>9e94758b mov edx,4</code>,
-<code>9e947593 call r15</code> — are confirmed byte-for-byte. The CFI anchor of the first inner call is
+<code>9e947593 call r15</code>, are confirmed byte-for-byte. The CFI anchor of the first inner call is
 <code>0xffffffff9e947576 - 0x2ee23e = 0xffffffff9e659338</code>, <code>N = 3</code>. The second inner call is
 loaded from <code>[req + 0x48]</code> with <code>N = 0x16</code>.</p>
 <p><strong>One interpretation caveat carried forward deliberately.</strong> Here <code>rbx = rcx = req</code>, the
@@ -917,12 +918,12 @@ intent, not what the bytes show, and the difference matters for anyone building 
 <p>Handler dispatch is guarded by an identity test of the form
 <code>sub rax, r15; ror rax, 3; cmp rax, N; ja reject</code>.</p>
 <p>For the sysctl dispatch site: <code>A = 0xffffffff9e6616f8</code>, <code>N = 0x1a3</code> (419), admitting the
-range <code>[0xffffffff9e6609e0 .. 0xffffffff9e6616f8]</code> — 420 8-byte slots, <strong>420/420
+range <code>[0xffffffff9e6609e0 .. 0xffffffff9e6616f8]</code>: 420 8-byte slots, <strong>420/420
 non-null</strong>. Admission is <code>ror3(A − H) ≤ N</code> with <code>ror3(v) = ((v &gt;&gt; 3) | (v &lt;&lt; 61)) &amp; MASK</code>.</p>
 <p>The census that makes this an identification rather than a guess: <strong>5,146</strong> complete
 <code>lea</code>/<code>sub</code>/<code>ror3</code>/<code>cmp</code>/<code>ja</code> windows exist in TEXT. Of those 5,146, <strong>exactly one</strong> admits
 <code>kern.osreldate</code>'s handler (<code>ror3 = 0x81</code>) and <strong>exactly one</strong> admits the shared
-<code>ncpu</code>/<code>osrevision</code>/<code>pagesize</code>/<code>byteorder</code> handler (<code>ror3 = 0x1a2</code>) — <strong>the same window</strong>.</p>
+<code>ncpu</code>/<code>osrevision</code>/<code>pagesize</code>/<code>byteorder</code> handler (<code>ror3 = 0x1a2</code>): <strong>the same window</strong>.</p>
 <p><strong>[static]</strong> The sysctl handler window was identified by arithmetic, not by name.</p>
 <h3 id="83-the-writable-oid-scan">8.3 The writable-OID scan</h3>
 <p>With the mechanism understood, the writable surface was enumerated directly from the OID
@@ -952,7 +953,7 @@ surface; what it does not establish is that any particular entry is reachable fr
 browser with the privileges that process holds.</p>
 <h3 id="84-the-amplifier-and-why-it-is-not-one">8.4 The amplifier, and why it is not one</h3>
 <p>A natural follow-on: if a one-byte write can change <code>kind</code>, can it amplify into a bulk copy?
-Two one-byte primitives on the same field were designed — QUAD → STRING changes byte <strong>index 0</strong>
+Two one-byte primitives on the same field were designed: QUAD → STRING changes byte <strong>index 0</strong>
 at <code>struct + 0x14</code> to <code>0x03</code>; QUAD → <code>0x70…</code> changes byte <strong>index 3</strong> at <code>struct + 0x17</code> to
 <code>0x70</code>. The storage target for <code>ncpu</code>, <code>0xffffffffa20fe8bc</code> (file <code>0x3d0e8bc</code>, u32 = 16),
 sits in a favourable neighbourhood:</p>
@@ -965,7 +966,7 @@ arg + 32 = 0
 arg + 40 = 0x0000ffff00000000
 arg + 48 = 0x9f6caf8e00000000
 </code></pre>
-<p><strong>32 zero bytes immediately follow</strong> — a low-collateral, self-verifying, reversible landing
+<p><strong>32 zero bytes immediately follow</strong>: a low-collateral, self-verifying, reversible landing
 zone. The proposed amplifier: a 1-byte write at <code>ncpu_struct + 0x14 = 0x03</code> so that
 <code>sysctl({1,3}, 2, old, oldlenp, new, buf, N)</code> copies N bytes into the 8-byte slot. It was
 falsified against the real <code>__sysctl</code>:</p>
@@ -982,43 +983,43 @@ Flag-constant search across all four: 1 hit
 </code></pre>
 <p><strong>[static]</strong> <code>__sysctl</code> builds a 0x60-byte <code>sysctl_req</code> on the stack (<code>[rbp-0x110] = old</code>,
 <code>[rbp-0x108] = oldlenp</code>, <code>[rbp-0x100] = new</code>). <strong>Dispatch is by function pointer
-(<code>oid_handler</code>), not by type field</strong> — changing copy semantics requires changing <code>oid_handler</code>, a
+(<code>oid_handler</code>), not by type field</strong>: changing copy semantics requires changing <code>oid_handler</code>, a
 CFI-guarded function pointer, not a byte. The amplifier as stated is falsified; the caveat
-carried honestly at design time — "whether the STRING handler copies <code>newlen</code> without a length
-check is inference, not observation on this kernel" — turned out not to need resolving, because
+carried honestly at design time: "whether the STRING handler copies <code>newlen</code> without a length
+check is inference, not observation on this kernel", turned out not to need resolving, because
 the dispatch model rules the whole approach out first.</p>
 <hr />
-<h1 id="part-ii-tested-and-proven-dead">Part II — Tested and proven dead</h1>
+<h1 id="part-ii-tested-and-proven-dead">Part II : Tested and proven dead</h1>
 <p><em>Routes that were fired and closed, each with the evidence class that closed it. These are not unsearched ground.</em></p>
 <h2 id="9-execute-only-text-the-constraint-that-reframes-the-leak-new">9. Execute-only text: the constraint that reframes the leak <code>[new]</code></h2>
-<p>The PS5 system libraries (<code>libkernel_web</code>) are <strong><code>xotext</code> — execute-only text</strong>. Reading that
+<p>The PS5 system libraries (<code>libkernel_web</code>) are <strong><code>xotext</code>, execute-only text</strong>. Reading that
 code through a read/write primitive does not return garbage and does not return zeros; it faults.</p>
 <blockquote>
 <p><em>"Signature-scanning libkernel </em><em>text</em><em> is impossible (the libraries are </em><em>xotext</em><em>; reading
 code through the R/W primitive </em><em>faults and kills the process</em><em>)."</em></p>
 </blockquote>
-<p><strong>[upstream]</strong> <code>1nk1/PS5-Prolapse</code>, <code>docs/PROJECT_HANDOFF.md</code> §9.2 — from a working jailbreak,
+<p><strong>[upstream]</strong> <code>1nk1/PS5-Prolapse</code>, <code>docs/PROJECT_HANDOFF.md</code> §9.2, from a working jailbreak,
 hardware-verified on 13.60. <strong>The scope of this claim is libkernel, and nothing more.</strong> Both
 occurrences of <code>xotext</code> in the handoff (lines 381 and 853) name libkernel; neither mentions
 WebKit. Whether WebKit's text is also execute-only is <strong>not asserted by the source and not tested
-by us</strong> — and §9.2 will argue that it does not need to be known.</p>
+by us</strong>: and §9.2 will argue that it does not need to be known.</p>
 <p>The same source confirms the corollary that the static route is closed for them too: <em>"there is
 no 13.60 [sprx] locally, which is precisely why the runtime calibrate tile exists."</em> We
 verified the same on our own host: <code>find /opt/AGENTS/Ares -iname "*.sprx"</code> returns nothing, and
 <code>ps5-sys.pup</code> yields no readable <code>.sprx</code> string through its encrypted L1.</p>
 <h3 id="91-what-the-constraint-does-and-does-not-close">9.1 What the constraint does and does not close</h3>
 <p>The plan carried through most of this
-research — <em>"scan WebKit text for <code>5f c3</code> / <code>5e c3</code> / <code>5a c3</code> / <code>59 c3</code> and rebuild the gadget
-map"</em> — is closed, but the accurate statement of why matters. For <code>libkernel</code> the closure is
+research: <em>"scan WebKit text for <code>5f c3</code> / <code>5e c3</code> / <code>5a c3</code> / <code>59 c3</code> and rebuild the gadget
+map"</em> is closed, but the accurate statement of why matters. For <code>libkernel</code> the closure is
 hard: reading the text faults. For WebKit the stronger and better-supported statement is not
 that the scan <strong>cannot</strong> be run but that <strong>it is not the route taken by the people who have this
-working — they have never read a single byte of WebKit code.</strong> That claim does not depend on
+working: they have never read a single byte of WebKit code.</strong> That claim does not depend on
 assuming WebKit is <code>xotext</code>, and it is the one worth carrying.</p>
 <p>There is a cross-check already in the record: the community <code>wk_gadgetmap</code> contains <strong>no
-<code>0f 05</code></strong>. That is consistent with the text being unreadable, but it is not proof of it — the
+<code>0f 05</code></strong>. That is consistent with the text being unreadable, but it is not proof of it: the
 absence is equally consistent with the map having been built by a method that never read the text
 either, which is what §9.2 shows.</p>
-<h3 id="92-the-reframe-read-the-address-not-the-code">9.2 The reframe — read the address, not the code</h3>
+<h3 id="92-the-reframe-read-the-address-not-the-code">9.2 The reframe : read the address, not the code</h3>
 <p>This is the more useful product of the
 finding.</p>
 <table>
@@ -1041,7 +1042,7 @@ finding.</p>
 let textAreaVtable = p.read8(textAreaVtPtr);
 </code></pre>
 <p>On 9.00+ the active path is a JS global holding a code address, minus a candidate offset, with
-range and page-alignment validation — <code>ctor - hc</code> checked into the <code>0x8…0</code> / <code>0x4000</code>-aligned
+range and page-alignment validation: <code>ctor - hc</code> checked into the <code>0x8…0</code> / <code>0x4000</code>-aligned
 window. The pre-9.00 legacy path reads the <strong>vtable</strong>, which lives in <code>.data.rel.ro</code>: data, not
 execute-only text. That legacy branch fired <strong>0 times across 81 recorded runs</strong>. The whole method
 is <em>"read the address of the code from the data"</em>, never <em>"read the code"</em>.</p>
@@ -1056,7 +1057,7 @@ deltas suggest:</p>
 </code></pre>
 <p><strong>[static]</strong> Recomputed from the upstream table. The deltas <code>+0x162C</code> / <code>+0x3BB8</code> / <code>+0x3C11</code>
 are exact <strong>for the 12.xx family</strong>. They are <strong>not</strong> a property of <code>libkernel_web</code> in general:
-on 10.00 all three differ. And <code>thread_list</code> is not stable even <em>within</em> 12.xx — <code>0x4AA1D</code> at
+on 10.00 all three differ. And <code>thread_list</code> is not stable even <em>within</em> 12.xx: <code>0x4AA1D</code> at
 12.00 versus <code>0x4E9FD</code> at 12.40.</p>
 <table>
 <thead>
@@ -1092,11 +1093,11 @@ on 10.00 all three differ. And <code>thread_list</code> is not stable even <em>w
 <p><strong>Stability has to be recorded field by field, not per table.</strong> Anyone treating "the deltas" as a
 single block would get <code>thread_list</code> wrong while staying inside 12.xx. <strong>For 14.00 the deltas are
 to be measured, not inherited.</strong> <code>pop_rsp</code> works as a negative control in the meantime: present
-at <code>0x343AA</code> on 10.00, absent on both 12.xx builds — its absence is what says the <code>pop rsp</code> has
+at <code>0x343AA</code> on 10.00, absent on both 12.xx builds: its absence is what says the <code>pop rsp</code> has
 to come from WebKit.</p>
 <p>We cannot copy their harness outright: their method reads the stack of a worker, and <code>worker</code> is
 <code>SecurityError</code> in the guide WebProcess (§3.1). The open question it leaves is narrow and
-concrete — <strong>which stack is ours</strong>: the main JS thread's, a self-allocated <code>ArrayBuffer</code> that
+concrete: <strong>which stack is ours</strong>: the main JS thread's, a self-allocated <code>ArrayBuffer</code> that
 something returns into, or the canvas backing store already under test. If any of the three is
 readable and holds a <code>libkernel_web</code> return address, the deltas yield <code>syscall_wrapper</code> without
 ever touching execute-only code.</p>
@@ -1136,10 +1137,10 @@ structured-clone corruption never lands in the form that makes the wrapper
 <strong>[device]</strong> <code>evidence/jsc-fingerprint-1400.md</code>, <code>evidence/webkit-entry-portability-1400.md</code>.
 Plan 4 had the getter return <code>Symbol("x" × 924168)</code>: <strong>663 attempts, 663 × <code>Invalid leaked
 addresses</code></strong>. Plan 5 set <code>copiedLength = 924176</code>, matching <code>LEAK_STRING_LENGTH</code> <strong>by
-construction</strong> (924168 + <code>Symbol(</code> + <code>)</code>), not by corruption — every captured word was <code>0x7878</code>
+construction</strong> (924168 + <code>Symbol(</code> + <code>)</code>), not by corruption: every captured word was <code>0x7878</code>
 widened to <code>0x7878787878787878</code>, failing the cell/holder cross-checks at offsets 8 and 12. The
 mechanism itself is intact (a Proxy trap fires on all variants, <code>trap_calls = 4</code>); what changed
-is that the bare super-property form no longer passes a receiver — the stock <code>leak()</code> bare call
+is that the bare super-property form no longer passes a receiver: the stock <code>leak()</code> bare call
 produced ~150 × "Scope not leaked" at stage 0. The structured-clone corruption the published
 stage depends on does not occur on JSC 14.00: the stage is dead, not misconfigured.</p>
 <h2 id="12-what-remains-unsolved-new">12. What remains unsolved <code>[new]</code></h2>
@@ -1148,7 +1149,8 @@ is load-bearing for anyone continuing the work.</p>
 <h3 id="121-first-which-artifact-describes-which-firmware">12.1 First: which artifact describes which firmware</h3>
 <p>Before the gaps can be read correctly the artifacts have to be sorted, because they do not all
 describe the target: the static analysis was performed on a kernel image that is <strong>not</strong> the
-firmware under test, and the image for the firmware under test does not exist anywhere.</p>
+firmware under test. What has changed since this section was first written is that the reason for
+that is now <strong>known and named</strong>, rather than a statement about availability.</p>
 <table>
 <thead>
 <tr>
@@ -1170,19 +1172,96 @@ firmware under test, and the image for the firmware under test does not exist an
 <td><strong>14.00</strong></td>
 </tr>
 <tr>
-<td>A 14.00 kernel image</td>
-<td><strong>does not exist anywhere</strong></td>
+<td><code>kernel-hunt/fw1400/ps5-sys-14.00.pup</code> (sha256 <code>1eb4b184…8ebc</code>, magic <code>SLB2</code>, BLS <code>@0x24 = 0x4B2339D5</code>)</td>
+<td><strong>14.00: acquired, still encrypted</strong></td>
+</tr>
+<tr>
+<td>A <strong>decrypted</strong> 14.00 kernel image</td>
+<td><strong>still absent: blocked on the Layer 1 key</strong></td>
 </tr>
 </tbody>
 </table>
-<p><strong>[static]</strong> The BLS fingerprint and the user-agent string were both read directly; the
-mismatch is a property of what was available, not of the analysis. The consequence is a scope
-rule governing every kernel claim in this note: <strong>all</strong> static results — the gate chain of §7.5,
-the CFI-window census of §8.2, the 303 writable OIDs of §8.3, the OID field map of §7.1 and the
-<code>esi = 241</code> derivation of §7.4 — describe <strong>firmware 13.60</strong>, offered as a characterisation of
+<p><strong>A real 14.00 PUP now exists; a decrypted 14.00 kernel image does not.</strong> The distinction is
+the whole content of this section and the two must not be collapsed into either "we have it" or
+"it doesn't exist".</p>
+<pre><code>Path      : kernel-hunt/fw1400/ps5-sys-14.00.pup
+Size      : 1 260 600 832 bytes
+SHA256    : 1eb4b18451e0f064fc23b5bd4c95cae7f6489f9ad1148b5dfb0d66452a108ebc
+Source    : archive.midnightchannel.net — &quot;PS5 Official Retail System Firmware v14.00&quot;, 2026-09-18
+Magic @0x00: SLB2
+BLS  @0x24 : 0x4B2339D5
+</code></pre>
+<p><strong>[verified]</strong> The BLS value read directly from the file at <code>@0x24</code> (<code>d5 39 23 4b</code>, little-endian)
+<strong>matches the 14.00 fingerprint recorded before the file was in hand</strong>: the identification was
+made on the fingerprint first and confirmed against the artifact second, which is the order that
+makes it a confirmation rather than a labelling exercise.</p>
+<p><strong>The block is Layer 1, and it is now named rather than assumed.</strong></p>
+<pre><code>Key    : PUP container key (Layer 1)
+Lives  : Titania Security Processor
+Used by: encsrv_decrypt_header()
+ioctl  : 0xC0184402   Device: /dev/pup_update0
+</code></pre>
+<p><strong>The key is universal, identical on every PS5 from firmware 1.0 onward.</strong> Extracted once, every
+PUP past and future becomes decryptable on PC. <strong>But extraction requires a jailbroken PS5 at
+firmware 13.60 or below</strong>, which is where Byepervisor reaches, and no such console is available.
+<strong>The 14.00 console under test cannot extract the key that unlocks its own firmware.</strong></p>
+<p><strong>The Layer 1 boundary is visible in the bytes.</strong> Comparing the 14.00 and 14.10 PUPs at <code>0x400</code>:</p>
+<pre><code>14.00 @0x400: 5414 f5ee 1001 0132 0400 0000 b005 e00d | f6a0 655a 93b6 ...
+14.10 @0x400: 5414 f5ee 1001 0132 0400 0000 b005 e00d | 158b b56a 2a44 ...
+              ^^^^^^^^^^^^^ identical in cleartext ^^^^^^^^  ^^ encrypted, different
+</code></pre>
+<p><strong>Sixteen bytes of shared cleartext header followed by immediately divergent ciphertext</strong>: the
+structural signature of a container key applied at a fixed offset. Both files read directly.</p>
+<p><strong>Independent confirmation from the opposite direction.</strong> <code>deepkicks/TitaniaPy</code>
+(<a href="https://github.com/deepkicks/TitaniaPy">github.com/deepkicks/TitaniaPy</a>, pushed 2026-10-16)
+built a PC-side PUP/BLS parser and tested every known key against real 14.00 and 14.10 PUPs.
+It reached the same wall, describing the same four-layer structure:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Purpose</th>
+<th>Their status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>PBKDF2 master key derivation</td>
+<td>Solved</td>
+</tr>
+<tr>
+<td>1</td>
+<td>PUP container encryption</td>
+<td><strong>Blocked: key not public</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>PUP segment-level encryption</td>
+<td>Blocked (depends on Layer 1)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Inner firmware encryption</td>
+<td>Solved</td>
+</tr>
+</tbody>
+</table>
+<p>Their own summary: <em>"The tool is one key away from full PUP decryption."</em> Their extraction path
+names the same device, a dump of the <code>pup_update0</code> ioctl handler, and the same precondition:
+<em>"If you have a jailbroken PS5 on FW 13.60 or below."</em> <strong>Two independent directions, same
+conclusion, same named blocker.</strong></p>
+<p><strong>What this changes and what it does not.</strong> The point of this section was and remains that every
+static kernel conclusion in this note is drawn from <strong>13.60</strong>. That is untouched. What changed is
+that the 14.00 artifact is now <strong>procurable and identified</strong>, and the remaining distance between
+it and a kernel image is a <strong>single named key with a named precondition</strong> rather than an absent
+file. The scope rule still governs: <strong>all</strong> static results: the gate chain of §7.5, the
+CFI-window census of §8.2, the 303 writable OIDs of §8.3, the OID field map of §7.1 and the
+<code>esi = 241</code> derivation of §7.4, describe <strong>firmware 13.60</strong>, offered as a characterisation of
 that kernel and a hypothesis about 14.00, not a description of it. The device results in §3 are
-unaffected: those came off the 14.00 console directly. The reader should assume the kernel-side
-numbers move until a 14.00 image says otherwise.</p>
+unaffected: those came off the 14.00 console directly. The reader should still assume the
+kernel-side numbers move until a decrypted 14.00 image says otherwise, but that image is now
+one key away, not one discovery away.</p>
 <h3 id="122-two-separate-gaps-not-one">12.2 Two separate gaps, not one</h3>
 <p>The remaining work is usually described as a single blocker. It is two, and they are
 independent:</p>
@@ -1217,13 +1296,13 @@ independent:</p>
 </tbody>
 </table>
 <p>Solving the first does not advance the second: a code leak makes the kernel <em>reachable</em>, not
-<em>writable</em>. <strong>Even with the leak solved, <code>sysctl</code> does not give kernel read/write</strong> — the kind
+<em>writable</em>. <strong>Even with the leak solved, <code>sysctl</code> does not give kernel read/write</strong>: the kind
 swap of §4 is a permission bypass that closes a denying branch, not a memory-safety violation,
 and moves no attacker bytes on its own. The other candidate on that path, <code>aio_multi_wait</code>, is
 patched on 14.00 <strong>[device]</strong> (bypass characterisation <strong>[static]</strong>, 13.60). Reporting the swap
 as "the kernel write" would be reporting a permission change as a primitive.</p>
 <p><strong>6.1.1 No kernel write is reachable from the browser.</strong> The canvas UAF writes the WebProcess
-heap; the kind swap lives in kernel memory. Nothing here bridges them — the PoC driver reports
+heap; the kind swap lives in kernel memory. Nothing here bridges them: the PoC driver reports
 <code>blocked_at: C-kernel</code> rather than pretending otherwise. <strong>[device]</strong></p>
 <p><strong>6.2 No information leak survives DAZ.</strong> FontFace reclaim discloses two live WebProcess heap
 pointers at <code>+0x58</code>/<code>+0x68</code> in a script-controlled 192-byte buffer, at roughly one run per
@@ -1236,12 +1315,12 @@ float64 pointer read → DAZ <code>0.0</code>. <strong>[device]</strong></p>
 refcount, CVSS 3.1 <strong>10.0</strong>, <code>FreeBSD-SA-24:14.umtx.asc</code>) was fixed upstream in September
 2024; PS5 14.00 ships September 2026 on a base pinned at r230171, so it is <em>expected</em>
 patched. But the correct test has never run: syscall <strong>454</strong> hits <code>kmq_open</code>, returns <code>EINVAL</code>,
-and records "patched" — right conclusion, wrong reason. The correct number is <strong>451</strong>.
+and records "patched": right conclusion, wrong reason. The correct number is <strong>451</strong>.
 <strong>[static]</strong></p>
 <p><strong>6.4 CVE-2026-45251 is neither confirmed nor falsified.</strong> The advisory
 (<code>FreeBSD-SA-26:19.file.asc</code>, CVSS 3.1 <strong>7.8</strong>) describes a poll/select use-after-free. The
 differential outlier pointing at it was tested with probes that, in most arms, never touched
-their subject (§13.4); the one genuine negative — messageChannel — is weak, because the crash
+their subject (§13.4); the one genuine negative, messageChannel, is weak, because the crash
 oracle is weaker than the predicate under test.</p>
 <p><strong>6.5 The guide WebProcess's Capsicum state is unknown.</strong> Whether it is in capability mode at
 all was never determined, and the gap is not minor: upstream's capability-mode gate
@@ -1253,14 +1332,13 @@ the branch at <code>0xffffffff9e947f49</code> has not been re-verified against a
 exists; the PUP held is 14.10, its inner layer encrypted against every publicly known key
 (brute-forced, all high entropy). §13.7 proposes routing around this by testing the mechanism
 against the live kernel through a syscall channel, without decrypting anything.</p>
-<p><strong>6.7 The floor of static analysis was reached.</strong> On this dump — no symbols, linear disassembly
-— the achievable result was 2 slots proven by two independent methods, 1 fd type excluded
-outright, 1 differential outlier left open, and 5 claims retracted. That outlier cannot be
+<p><strong>6.7 The floor of static analysis was reached.</strong> On this dump (no symbols, linear disassembly), the achievable result was 2 slots proven by two independent methods, 1 fd type excluded
+outright, and 1 differential outlier left open. That outlier cannot be
 closed without the console or a <code>System.map</code>.</p>
 <h3 id="123-closed-branches-measured-absence-not-unsearched-ground">12.3 Closed branches: measured absence, not unsearched ground</h3>
 <p>Seven candidate routes to the missing code leak were closed on device: six on the second day,
 and one on the third after upstream's own failure record named the trap.
-They are reported together because the point is not the list — it is that each was closed with
+They are reported together because the point is not the list: it is that each was closed with
 a <strong>different class of evidence</strong>, so the set does not share a single failure mode that could
 be invalidating all seven at once.</p>
 <table>
@@ -1274,53 +1352,53 @@ be invalidating all seven at once.</p>
 <tbody>
 <tr>
 <td>FontFace reclaim (upstream <code>p563</code>)</td>
-<td><strong>Closed — dies inside <code>document.fonts.load()</code></strong></td>
+<td><strong>Closed: dies inside <code>document.fonts.load()</code></strong></td>
 <td>Verbatim upstream code, 15 runs</td>
 </tr>
 <tr>
 <td><code>lineDash</code> vector <code>m_size</code></td>
-<td><strong>Closed — offset not reachable from the alias</strong></td>
+<td><strong>Closed: offset not reachable from the alias</strong></td>
 <td>Live oracle + working primitive</td>
 </tr>
 <tr>
 <td>Alias-window pointer deref</td>
-<td><strong>Closed — no pointer in the window</strong></td>
+<td><strong>Closed: no pointer in the window</strong></td>
 <td>Raw-bit scan, DAZ-immune</td>
 </tr>
 <tr>
 <td>vtable / code-slot scan</td>
-<td><strong>Closed — no code-like slot accessible</strong></td>
+<td><strong>Closed: no code-like slot accessible</strong></td>
 <td>88-slot scan, zero code-shaped</td>
 </tr>
 <tr>
 <td>float64 setter as pointer carrier</td>
-<td><strong>Closed — the setter normalises the denormal away</strong></td>
+<td><strong>Closed: the setter normalises the denormal away</strong></td>
 <td>Bit-level write-channel round-trip</td>
 </tr>
 <tr>
 <td>Direct read of <code>libkernel</code> code for a gadget map</td>
-<td><strong>Closed — that text is execute-only</strong></td>
+<td><strong>Closed: that text is execute-only</strong></td>
 <td>Fault as proof of the protection</td>
 </tr>
 <tr>
 <td><code>ArrayBuffer</code> spray as the reclaiming object</td>
-<td><strong>Closed — a zeroed spray leaves a null vtable, so every C++ method faults</strong></td>
+<td><strong>Closed: a zeroed spray leaves a null vtable, so every C++ method faults</strong></td>
 <td>Our probe withdrawn against upstream's recorded failure</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Code-slot via direct read — closed by the fault itself.</strong> Under <code>xotext</code> (§9) a read of
+<p><strong>Code-slot via direct read: closed by the fault itself.</strong> Under <code>xotext</code> (§9) a read of
 <code>libkernel</code> code through the read/write primitive kills the process. That turns our crash
 pattern from a failure into a measurement: <strong>every time a read landed somewhere that could be
 <code>libkernel</code> code and the page died, the primitive was working correctly against a protection we
 did not know was there.</strong> The branch is closed not by an empty result but by a fault that means
-<em>you are not allowed to read this</em>, which is a stronger statement than absence — it says the
+<em>you are not allowed to read this</em>, which is a stronger statement than absence: it says the
 bytes exist and are deliberately unreadable. <strong>[upstream]</strong> for the protection on <code>libkernel</code>;
-the reading of our own crash pattern through it is <strong>[hypothesis]</strong> — the source establishes the
+the reading of our own crash pattern through it is <strong>[hypothesis]</strong>: the source establishes the
 mechanism on its own libraries, and we have not instrumented our crashes to attribute each one.</p>
-<p><strong>The float64 setter — closed by writing a pointer through it.</strong> This branch's evidence class is
+<p><strong>The float64 setter: closed by writing a pointer through it.</strong> This branch's evidence class is
 unlike the others: it does not say <em>there is no pointer where we can reach</em>, it says <strong>we
-wrote a pointer into the channel and the channel destroyed it</strong> — a direct measurement of where
+wrote a pointer into the channel and the channel destroyed it</strong>: a direct measurement of where
 FTZ lives rather than an inference from a null scan. A PS5 heap pointer <code>0x00000100abcd000</code> is
 an IEEE-754 <strong>denormal</strong> (exponent zero, magnitude ≈ 3.7e-315). JavaScript represents it
 without loss: the <code>DataView</code> round-trip is bit-identical on all four test values. The property
@@ -1335,7 +1413,7 @@ representation, it is in the channel.</strong> The value survives <code>DataView
 the way through the float setter, which localises FTZ to the setter path and not to JS's number
 model. This closes the most obvious route to byte access, and is precisely why the attempt moved
 to a byte channel (<code>putImageData</code>), which never touches floating point at all.</p>
-<p><strong>FontFace — closed by running upstream's own code, not our reading of it.</strong> The usual failure
+<p><strong>FontFace: closed by running upstream's own code, not our reading of it.</strong> The usual failure
 mode in a port is that the porting author's interpretation differs from the original's. That
 escape hatch was removed: the upstream <code>p563</code> module was run <strong>byte-identical except for one
 line</strong>, the beacon transport. <strong>Fifteen runs</strong>, identical outcome every time:</p>
@@ -1345,7 +1423,7 @@ trigger `then`    ✗  never
 HIT / ALL-CLEAN   ✗  never
 </code></pre>
 <p><strong>[device]</strong> 15 × <code>P563-SETUP</code>, 15 × <code>P563-LOAD-CALLED</code>, zero <code>HIT</code>, zero <code>ALL-CLEAN</code>. The
-run terminates <strong>inside <code>document.fonts.load()</code>, before the UAF path begins</strong> — not at the
+run terminates <strong>inside <code>document.fonts.load()</code>, before the UAF path begins</strong>: not at the
 spray, not at the reclaim, not at the use.</p>
 <p>This also resolves a discrepancy with upstream rather than arguing about it. Upstream runs this
 code as a standalone HTML page with its own process and resources; we run it inside the guide's
@@ -1354,16 +1432,16 @@ and it was established <strong>with their exact code</strong>, not with a recons
 <p><strong>The scope of that closure is narrower than the heading, and it matters.</strong> Our probe used the
 repeated-<code>load()</code> shape: a second <code>document.fonts.load()</code> over the <em>same</em> faces. Upstream's
 reconciliation of their own contradictory records shows that this specific shape does not
-reclaim in stage 2 — their beacon <code>S2-b</code> reads 0 across every log for the three page families
-that use it — which is the same zero we measured. But a <strong>different shape does reclaim</strong>: a
+reclaim in stage 2: their beacon <code>S2-b</code> reads 0 across every log for the three page families
+that use it, which is the same zero we measured. But a <strong>different shape does reclaim</strong>: a
 fresh <code>FontFace</code> with a fresh <code>@font-face</code> rule per phase, with a full GC cycle between phases,
 recorded <code>P2:HIT</code> three times and <code>TWO_UAF=YES</code>. <strong>So "FontFace closed" is true of the shape
 we ran and false as a general statement about second reclaims on 14.10.</strong> We have not tried the
 fresh-face-per-phase shape on 14.00, and their result does not transfer without a run of our own
-— the same rule that governs the deltas in §9.3. What the alternative shape does <em>not</em>
+This is the same rule that governs the deltas in §9.3. What the alternative shape does <em>not</em>
 change is the blocker: upstream records that it "gives a heap leak but not R/W or code exec",
 because the reclaimed buffer's absolute address remains unknown.</p>
-<p><strong>lineDash — a real negative, because the oracle was alive.</strong> The <code>m_size</code> field of the dash
+<p><strong>lineDash: a real negative, because the oracle was alive.</strong> The <code>m_size</code> field of the dash
 vector was targeted as a candidate for a size-based read amplification. Six runs:</p>
 <pre><code>alias_idx: 17    bidirectional: true    baseline: 4    V: 7
 all 11 setters:  before 4  -&gt;  after 4
@@ -1371,12 +1449,12 @@ verdict: NO-REACHABLE-OFFSET
 </code></pre>
 <p><strong>[device]</strong> The distinction that makes this worth reporting: the oracle was <strong>live</strong> (the
 baseline read correctly) and the primitive was <strong>working</strong> (<code>bidirectional: true</code>), and the
-value did not move. That is a genuine negative about reachability — not the silent-negative
+value did not move. That is a genuine negative about reachability, not the silent-negative
 failure of §13.4, where the probe never touched its subject. A companion run
 (<code>linedash-offsetmap-1400</code>) independently returned <code>NO-SIZE-SIGNATURE-IN-WINDOW</code> across an
-<code>N = 1,2,4,8,16</code> sweep, so the field was not merely unwritable but unidentifiable in the
+<code>N = 1,2,4,8,16</code> sweep, so the field was only unwritable but unidentifiable in the
 window.</p>
-<p><strong>Alias pointer deref — no pointer to dereference.</strong> The question was whether the aliased window
+<p><strong>Alias pointer deref: no pointer to dereference.</strong> The question was whether the aliased window
 contains a pointer the engine itself dereferences, which would yield arbitrary-address reads
 without changing the primitive. Twelve slots:</p>
 <pre><code>lineWidth      3ff0000000000000   normal-float
@@ -1393,38 +1471,123 @@ anywhere. The window does not contain a pointer to dereference.</p>
 value. It recombines raw bits through <code>Uint32Array</code> and classifies on <code>(hi, lo)</code>, so our own
 read cannot be zeroed by the FPU. The absence of pointers is an observation about the window,
 not an artifact of how it was read.</p>
-<p><strong>vtable / code-slot — nothing code-shaped in reach.</strong> <code>vtable-leak-1400</code> scanned for a
+<p><strong>vtable / code-slot: nothing code-shaped in reach.</strong> <code>vtable-leak-1400</code> scanned for a
 vtable or code pointer reachable from the reclaimed object:</p>
 <pre><code>VTABLE: slots=88  codeish=0
 verdict: NO-CODE-SLOT-ACCESSIBLE
 </code></pre>
 <p><strong>[device]</strong> Eighty-eight slots scanned, zero code-shaped values. This is the same negative
 result the other branches produced, arrived at by a different route.</p>
-<p><strong><code>ArrayBuffer</code> spray as the reclaiming object — closed before it was fired.</strong> The obvious
+<p><strong><code>ArrayBuffer</code> spray as the reclaiming object: closed before it was fired.</strong> The obvious
 reclaim for a 768-byte slot is an <code>ArrayBuffer</code> of the same size, and a probe was built on that
 assumption. It was withdrawn before running, because upstream's own failure record already named
 the trap: at version 11 of their equivalent probe they wrote that <strong>all C++ methods crash on a
 zeroed <code>ArrayBuffer</code> spray</strong>, the root cause being that a zeroed spray leaves a <strong>null vtable,
 null <code>m_canvas</code> and null <code>m_stateStack</code></strong>, and every C++ code path touches at least one of them.
-Their capture shows the shape of it — the log runs <code>BOOT</code>, <code>PRE-UAF</code>, <code>POST-UAF:ctx=OK</code>,
+Their capture shows the shape of it: the log runs <code>BOOT</code>, <code>PRE-UAF</code>, <code>POST-UAF:ctx=OK</code>,
 <code>PRE-SPRAY n=500</code>, <code>POST-SPRAY</code>, <code>PRE-READ: attempting-lineWidth</code>, and then stops. <strong>No
 <code>POST-READ</code> exists.</strong> The process dies on the first C++ call after the spray.</p>
 <p><strong>[upstream]</strong> for the mechanism, on 14.10. <strong>The class of evidence here is different from the
 other six: the branch was closed by reading someone else's crash log, not by producing our own.</strong>
 That is a legitimate closure and it is worth naming as such, because it is also the cheapest one
-available — the alternative was to spend a device run rediscovering what had already been
+available: the alternative was to spend a device run rediscovering what had already been
 written down. The probe was rebuilt to reclaim with a <strong>second <code>CanvasRenderingContext2D</code></strong> of
 the same type instead, which leaves the vtable valid, and the <code>ArrayBuffer</code> was kept only as a
 final phase in which no C++ method is called afterwards.</p>
 <p><strong>What this changes about the shape of §6.</strong> The remaining gap is not "we did not look". It is
 a <strong>measured boundary</strong>: with a working bidirectional primitive on the reclaimed object, the
 reachable window contains no pointer, no code-shaped slot, and no size field that would amplify
-a read — and the float64 lane that could carry a pointer in cannot survive the setter to
+a read, and the float64 lane that could carry a pointer in cannot survive the setter to
 deliver one. The code leak is not hiding in the object we can already touch. Finding it
 requires a different object or a different primitive, and that is a stronger statement than
-its absence — it narrows where the next attempt should go.</p>
+its absence: it narrows where the next attempt should go.</p>
+<h3 id="124-the-chain-as-implemented-and-the-one-primitive-that-is-missing">12.4 The chain as implemented, and the one primitive that is missing</h3>
+<p>The working chain was read out of the code that runs it rather than inferred, from
+<code>1nk1/PS5-Prolapse</code> (<code>core.js</code>), which jails from this same CVE class. Four steps:</p>
+<p><strong>Step A: <code>addrof</code> via structured clone, not via canvas</strong> (<code>core.js:663</code>). A 72 MB carrier
+array (<code>CARRIER_SLOTS = 9000000</code>) is seeded with alternating holders, and the round-trip is
+<code>result = history.state</code> (line 742). <strong>No worker is required.</strong> This matters here because
+<code>worker</code> is <code>SecurityError</code> in the guide WebProcess (§5) while <code>history.state</code> is available:
+the transport they use is one we have and have not used as an <code>addrof</code> carrier.</p>
+<p><strong>Step B: the candidate is a JSC <code>JSObject</code> with a known layout</strong> (<code>core.js:766-772</code>):</p>
+<pre><code>+0x00 StructureID   +0x08 butterfly   +0x10 VECTOR   +0x18 length
+</code></pre>
+<p><strong>Step C: it is not a leak, it is a hijack</strong> (<code>core.js:270</code>):</p>
+<pre><code class="language-js">function aimCarrier(candidate, address) {
+    const high = Math.floor(address / 0x100000000);
+    scratchWords[0] = address - high * 0x100000000;
+    scratchWords[1] = high;
+    for (let i = 0; i &lt; 8; ++i)
+        candidate[0x10 + i] = scratchBytes[i];   // overwrites the VECTOR
+}
+</code></pre>
+<p><strong>The address is not known in advance. It is imposed.</strong> The object is made to read from wherever
+the attacker writes into the vector field. This is the conceptual inversion that the framing
+"we need a leak" misses: the goal is not to discover an address, it is to <strong>choose</strong> one and
+make an object believe it.</p>
+<p><strong>Step D: the chase toward code</strong> (<code>core.js:907-946</code>): <code>executableAddress = low48At(header,
+0x18)</code>, then <code>+0x28</code> native function, <code>+0x30</code> native constructor, each validated for range and
+alignment. The same shape reappears for the WebKit base in <code>main.js</code>:
+<code>read8(leakval(textArea).add32(0x18))</code>. <strong><code>+0x18</code> again. The chase is always a pointer at
+<code>+0x18</code> that leads to code.</strong></p>
+<p><strong>The whole chain rests on one primitive: <code>candidate[0x10 + i] = byte</code>, a byte-addressable write
+to the vector field.</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Them</th>
+<th>Us</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>View of the object</td>
+<td><code>candidate[i]</code>, <strong>byte</strong></td>
+<td>float64 setter</td>
+</tr>
+<tr>
+<td>Bidirectional UAF</td>
+<td>yes</td>
+<td>yes (<code>bidirectional: true</code>)</td>
+</tr>
+<tr>
+<td><code>history.state</code></td>
+<td>yes</td>
+<td><strong>yes, available</strong></td>
+</tr>
+<tr>
+<td>Vector-field hijack</td>
+<td>yes</td>
+<td><strong>not obtained</strong></td>
+</tr>
+</tbody>
+</table>
+<p>This is not a wrong offset and not a missing idea. <strong>It is a class of primitive that the canvas
+alias, as built, does not provide.</strong> A float64 is eight bytes, so an arbitrary address can be
+placed inside a double; the open question was only whether any setter lands on a field the object
+dereferences.</p>
+<p><strong>Dead path: the canvas float setters cannot be pointer fields.</strong> <code>vector-hijack-1400</code> tested
+exactly that, with a control on every arm so a crash could not be mistaken for a broken context:</p>
+<pre><code>lineWidth     ctl=true addr=true  POINTER-LIKE=false
+miterLimit    ctl=true addr=true  POINTER-LIKE=false
+globalAlpha   ctl=true addr=true  POINTER-LIKE=false
+shadowBlur    ctl=true addr=true  POINTER-LIKE=false
+</code></pre>
+<p><strong>[device]</strong> Baseline alive, control passed, alias index localised. Every setter survived having
+an address-shaped value written into it.</p>
+<p><strong>The structural reason is the result, and it is stronger than the test.</strong> Canvas setters are
+<strong>float-valued by WebIDL</strong>. The engine stores the double and never dereferences it as a
+pointer. <strong>A canvas setter cannot be a pointer field, because the interface types it as a float
+and the engine honours that type.</strong> The <code>+0x10</code> vector lives in the <code>JSObject</code>'s butterfly, not
+in canvas properties. <strong>The negative was guaranteed by the interface definition before the
+probe ran; the probe confirmed the engine respects its own IDL.</strong></p>
+<p><strong>What this leaves.</strong> The blocker is now a single named primitive rather than an unknown. The
+remaining steps are concrete: a byte-addressable or vector-landing write on a JSC object, then
+the <code>+0x18</code> chase, then the WebKit base. <code>history.state</code> is available and unused as a carrier,
+which is an open road rather than a result.</p>
 <hr />
-<h1 id="part-iii-method-related-work-conclusion">Part III — Method, related work, conclusion</h1>
+<h1 id="part-iii-method-related-work-conclusion">Part III : Method, related work, conclusion</h1>
 <h2 id="13-methodology-new">13. Methodology <code>[new]</code></h2>
 <p>The process is a result of this engagement, so it is recorded at the same level of detail as
 the findings.</p>
@@ -1472,7 +1635,7 @@ headline as "vulnerable". The baseline holds.</p>
 <p>No symbol table, so every identification is arithmetic:</p>
 <ul>
 <li><strong>CFI windows as fingerprints.</strong> 5,146 complete <code>lea</code>/<code>sub</code>/<code>ror3</code>/<code>cmp</code>/<code>ja</code> windows in
-  TEXT; exactly one admits both known sysctl handlers — identified by arithmetic, not by name.</li>
+  TEXT; exactly one admits both known sysctl handlers, identified by arithmetic, not by name.</li>
 <li><strong>Slot-value identity over naming.</strong> <code>fo_poll @ +0x20</code> proven by three file-operation tables
   (<code>0xffffffff9feb7ca0</code>, <code>0xffffffffa05e62b0</code>, <code>0xffffffffa092f528</code>) each having <strong>only</strong> slot
   <code>+0x20</code> inside the validated window <code>[0xffffffff9e65b760 .. 0xffffffff9e65b7d8]</code>.</li>
@@ -1527,14 +1690,14 @@ churn counters:</p>
 </tbody>
 </table>
 <p>Five of six arms never opened a single instance of the resource they were testing. Their negatives
-are not negatives. The structural tell: every arm reported <code>paths_available: ["mc"]</code> — only the
+are not negatives. The structural tell: every arm reported <code>paths_available: ["mc"]</code>: only the
 messageChannel verification path existed, even in modules nominally testing other fd classes. The
 harness silently substituted the one path it could verify.</p>
 <blockquote>
 <p><strong>A negative from a probe that never touched its subject is not a negative.</strong></p>
 </blockquote>
 <p>The same error class appeared earlier in a more consequential form. <code>poc_1400.js</code>, run against
-patched Chromium 152, reported <code>A-entry ok: true</code> — a false positive: door 2 requested the
+patched Chromium 152, reported <code>A-entry ok: true</code>, a false positive: door 2 requested the
 re-entrant context as a <strong>different type</strong> (<code>bitmaprenderer</code> inner against <code>2d</code> outer), so
 <code>bmp_same</code> was false by construction on every engine and <code>hasUaf = (same === false) ||
 (bmp_same === false)</code> was always true. On the PS5 it would have reported <code>ok=true</code> regardless of
@@ -1542,37 +1705,37 @@ patch state. Two-direction verification fixed it: patched Chromium with the real
 <code>ok:false</code>/<code>same:true</code>/stops at A ✓; a synthetic vulnerable factory (fresh object per call,
 same type) → <code>ok:true</code>/<code>same:false</code>/proceeds to B ✓. <strong>A gate must be run against a
 known-negative before it is trusted on an unknown.</strong></p>
-<h3 id="135-retractions">13.5 Retractions</h3>
-<p>Five claims were retracted during the engagement. They are listed because each retraction
-taught something the surviving findings did not.</p>
+<h3 id="135-dead-paths-measured-negatives">13.5 Dead paths: measured negatives</h3>
+<p>Five readings do not work on this kernel. Each is recorded with its measurement so the next
+reader does not spend a day on it.</p>
 <ol>
-<li><strong>The OID-list walk.</strong> Walking the sibling link at <code>+0x08</code> from a known OID visited 5 nodes
-   and named 1; from <code>+0x00</code>, 3 visited / 1 named; via <code>+0x08</code> as list head, 3 visited / 0 named.
-   Pointers landed on non-OID data — one hop yielded <code>0x20786c25006b636f</code>, ASCII fragments.
-   <em>The layout is right; the traversal is not.</em> <strong>An analogy that was not executed is not
-   evidence.</strong></li>
-<li><strong>The amplifier.</strong> Falsified in §8.4: dispatch is by function pointer, not by type
-   field.</li>
-<li><strong>The kind-swap abandonment.</strong> An earlier note concluded that nothing on the <code>sysctl(2)</code> path
-   reads <code>oid_kind</code> — 1,773 <code>[reg+0x14]</code> reads in TEXT across 955 functions, <strong>0 of 16</strong> readers
-   inside <code>__sysctl</code> and its 15 direct callees. Correct and irrelevant: <strong><code>+0x14</code> is the wrong
-   offset</strong> (the high half of the <code>+0x10</code> pointer). The corrected <code>+0x1c</code> scan found the
-   load-bearing reader at <code>0xffffffff9e947f45</code>. A null result was read as a limit of the
-   question, not of the tool.</li>
-<li><strong>The <code>nopoll</code> leaf.</strong> Described as a "14-instruction leaf"; it is an 8-byte tail-jump
-   (<code>55 48 89 e5 89 f7 5d e9 84 d9 db ff</code>). The earlier <code>rets=1</code> counted the <em>next</em>
-   function, because a <code>ret</code>-terminated bound walks straight through a tail-jump.</li>
-<li><strong>The stub-slot misread.</strong> Every stub slot is 8 bytes: <code>e9 &lt;rel32&gt; cc cc cc</code>. Two stubs sit
-   adjacent for alignment and the wrong one (<code>+0x08</code>) was read instead of <code>+0x00</code>; referencer
-   arithmetic proves <code>+0x00</code> (stub <code>0xffffffff9e656510</code> ← <code>0x1ac7cd8</code> → table <code>0x1ac7ca0</code> →
-   <strong>+0x38 = fo_close</strong>). The retracted "walk = detach" belonged to code reached through the
-   wrong stub.</li>
+<li><strong>The sibling-link OID walk is not a traversal.</strong> Walking the sibling link at <code>+0x08</code> from a
+   known OID visits 5 nodes and names 1; from <code>+0x00</code>, 3 visited / 1 named; via <code>+0x08</code> as a
+   list head, 3 visited / 0 named. Pointers land on non-OID data; one hop yields
+   <code>0x20786c25006b636f</code>, ASCII fragments. <strong>The layout at those offsets is not a traversable
+   sibling list.</strong> An analogy that was not executed is not evidence.</li>
+<li><strong>The type field is not a dispatch input.</strong> Dispatch is by function pointer, not by type
+   field (§8.4). Changing the type field does not redirect dispatch.</li>
+<li><strong><code>[reg+0x14]</code> is not the <code>oid_kind</code> read site.</strong> 1,773 <code>[reg+0x14]</code> reads exist in TEXT
+   across 955 functions, and <strong>0 of 16</strong> readers sit inside <code>__sysctl</code> and its 15 direct
+   callees. <code>+0x14</code> is the high half of the <code>+0x10</code> pointer, not <code>oid_kind</code>. The load-bearing
+   reader is at <code>+0x1c</code>, <code>0xffffffff9e947f45</code>. <strong>A null result at <code>+0x14</code> says nothing about
+   <code>+0x1c</code>.</strong></li>
+<li><strong><code>nopoll</code> is not a leaf function.</strong> It is an 8-byte tail-jump
+   (<code>55 48 89 e5 89 f7 5d e9 84 d9 db ff</code>). A <code>ret</code>-terminated bound walks straight through a
+   tail-jump and counts the <em>next</em> function's <code>ret</code>, so function lengths read long across one.</li>
+<li><strong>Stub slots are at <code>+0x00</code>, not <code>+0x08</code>.</strong> Every stub slot is 8 bytes:
+   <code>e9 &lt;rel32&gt; cc cc cc</code>, and two stubs sit adjacent for alignment. Referencer arithmetic
+   places the slot at <code>+0x00</code> (stub <code>0xffffffff9e656510</code> ← <code>0x1ac7cd8</code> → table <code>0x1ac7ca0</code> →
+   <code>+0x38 = fo_close</code>). <code>+0x08</code> is the neighbouring stub.</li>
 </ol>
-<p>Three method bugs were found en route and are easy to repeat: <code>o.imm</code> arrives <strong>signed</strong> from
-capstone (this silently broke a TEXT bound and produced <code>call_targets = 0</code>; mask with
-<code>0xFFFFFFFFFFFFFFFF</code>); textual matching on <code>"-0xc8"</code> matched unrelated strings; and applying
-the static-file formula outside its domain — live runtime pointers carry the modern FreeBSD 13+
-KVA prefix <code>0xffff8e77…</code>, to which <code>VA - 0xffffffff9e3f0000</code> returns nonsense.</p>
+<p>Three traps in this toolchain repeat easily and are worth stating as rules. <code>o.imm</code> arrives
+<strong>signed</strong> from capstone, so a TEXT bound computed from it silently yields <code>call_targets = 0</code>;
+mask with <code>0xFFFFFFFFFFFFFFFF</code>. Textual matching on <code>"-0xc8"</code> matches unrelated strings that
+have nothing to do with the intended offset. And the static-file formula
+<code>VA - 0xffffffff9e3f0000</code> holds <strong>only inside the static image</strong>: live runtime pointers carry
+the modern FreeBSD 13+ KVA prefix <code>0xffff8e77…</code>, to which that formula returns nonsense.
+<strong>A gate must be run against a known-negative before it is trusted on an unknown.</strong></p>
 <h3 id="136-cve-existence-by-direct-query">13.6 CVE existence by direct query</h3>
 <p>Two CVEs in this note were verified against NVD directly
 (<code>services.nvd.nist.gov/rest/json/cves/2.0</code>) after a search engine returned nothing for one
@@ -1582,7 +1745,7 @@ of them. The search engine was wrong.</p>
 evidence of non-existence.</strong></p>
 </blockquote>
 <p>The same discipline produced the syscall-number correction. The community's "sysctl = 202"
-traces to a <code>syscall_map</code> with 331 entries in which 199 is absent and 202 is present —
+traces to a <code>syscall_map</code> with 331 entries in which 199 is absent and 202 is present:
 someone matched the map's key 202 against FreeBSD's upstream number without reading the PS5
 name table. The PS5 name table says otherwise, and the sysent table agrees:</p>
 <pre><code> 198  compat6.ftruncate   narg=0  sy_call=0xffffffff9e655760
@@ -1598,7 +1761,7 @@ name table. The PS5 name table says otherwise, and the sysent table agrees:</p>
 <p><strong>[static]</strong> Reproduced on the dump during this engagement. Slot 199's stub resolves to
 <code>0xffffffff9e9481e0</code>, the <code>__sysctl</code> entry identified independently by BFS in §4. Slot 202
 is an obsolete entry (<code>obs_{</code>) sharing a stub with slot 198.</p>
-<p>There is no arithmetic mapping between FreeBSD and PS5 numbering — <code>fstatfs</code> 358→394 is +36
+<p>There is no arithmetic mapping between FreeBSD and PS5 numbering: <code>fstatfs</code> 358→394 is +36
 and breaks the "−3" rule that fits other slots. <strong>Read the number from the name table, never
 from FreeBSD documentation.</strong></p>
 <p><strong>Two numbering spaces, not one right answer and one wrong.</strong> The framing worth carrying
@@ -1630,13 +1793,13 @@ contain a key that means <code>sysctl</code> in one of them:</p>
 the name-table read and the stub disassembly of §4. The map's own key inventory confirms 199
 absent from it.</p>
 <p>The hazard is concrete: taking <code>202</code> from the community map and handing it to the native table
-does not fail — it <strong>calls a different syscall</strong> and returns something. A wrong number here is
+does not fail: it <strong>calls a different syscall</strong> and returns something. A wrong number here is
 not an error; it is a wrong answer. <code>SYSCTL_NR = 199</code> is correct for the native table, and
 was cross-checked three ways: the PoC's own constant, <code>sysent-13.60.md</code>, and an independent
 scan resolving <code>idx 199 → 0xffffffff9e655a60</code>.</p>
 <h3 id="137-fuzzing-the-live-kernel-from-the-browser-proposed-not-executed">13.7 Fuzzing the live kernel from the browser (proposed, not executed)</h3>
 <p>Upstream's variant analysis closes with a wish: a <em>"baseline for diffing once someone gains any
-14.x read access"</em> — a chicken-and-egg, since the read access is what the baseline is for. The
+14.x read access"</em> is a chicken-and-egg, since the read access is what the baseline is for. The
 chain built here breaks the loop from the other side:</p>
 <pre><code>code leak -&gt; syscall dal WebProcess -&gt; fuzz syscall 14.00 -&gt; bug kernel
 </code></pre>
@@ -1644,18 +1807,19 @@ chain built here breaks the loop from the other side:</p>
 reachable at 199 (§13.6), the live 14.00 kernel becomes fuzzable <strong>from the browser</strong>, without
 the image and without a prior kernel primitive. The syscall surface is the fuzz target; the
 crash oracle is the page dying and the synchronous beacon (§13.8) recording exactly where.</p>
-<p>Two caveats, so this is not mistaken for a result: <strong>nothing here was executed</strong> — the chain's
-first link is the same missing code leak of §12.2 — and it is <strong>a route to a bug, not a bug</strong>:
+<p>Two caveats, so this is not mistaken for a result: <strong>nothing here was executed</strong>: the chain's
+first link is the same missing code leak of §12.2, and it is <strong>a route to a bug, not a bug</strong>:
 the guide WebProcess may be too constrained for the interesting call classes, and the crash
 oracle available from the browser is the same weak oracle discussed in §13.4. It is recorded
 because a dead end mapped is more useful to the next reader than one omitted.</p>
 <h3 id="138-the-patcher-that-did-not-patch-a-silent-false-negative-at-scale">13.8 The patcher that did not patch: a silent false negative at scale</h3>
-<p>The most consequential defect found in this engagement was not in the target. It was in our own
-automation, and it was invisible for most of the engagement's lifetime.</p>
+<p>A transport change in a reporting helper silently disabled <strong>125 of 146</strong> probe modules while the
+dashboard kept reporting them as normal. The failure was in the reporting layer, which is exactly
+why it was invisible: the thing that would have reported it was the thing that was broken.</p>
 <p><strong>The mechanism.</strong> Every probe module carries its own reporting helper:</p>
 <pre><code class="language-js">function post(ev, d) { /* ... */ }
 </code></pre>
-<p>The helper was rewritten from asynchronous <code>fetch</code> to <strong>synchronous XHR</strong> — a change that was
+<p>The helper was rewritten from asynchronous <code>fetch</code> to <strong>synchronous XHR</strong>: a change that was
 correct in principle, and taken from upstream's own comment that a synchronous beacon <em>"leaves
 the renderer before a possible crash in the same call"</em>. But the rewritten helper had <strong>no
 <code>return</code> statement</strong>, so it returned <code>undefined</code>.</p>
@@ -1708,12 +1872,12 @@ working against a synchronous transport:</p>
 </code></pre>
 <p><strong>146/146 modules patched, zero syntax errors.</strong> The recovery was not cosmetic: <strong>53 modules
 came back from <code>skipped</code></strong>, among them <code>CVE-2026-43715</code> (FontFaceSet UAF) and
-<code>CVE-2026-43720</code> (Canvas UAF) — modules that had <strong>never actually run on the device</strong> despite
+<code>CVE-2026-43720</code> (Canvas UAF), modules that had <strong>never actually run on the device</strong> despite
 having been swept.</p>
 <p><strong>The second-order lesson: the patcher that patched nothing.</strong> The first attempt at the corpus
 rewrite used a regex that held <strong>two levels of nesting</strong>. The helper has three
 (<code>function { fetch( { body: JSON.stringify( {…} ) } ) }</code>). The regex matched <strong>zero modules</strong>
-— and <strong>reported success</strong>.</p>
+and it <strong>reported success</strong>.</p>
 <blockquote>
 <p><strong>A patcher that does not patch and does not say so is worse than a broken patcher.</strong> A
 broken patcher fails loudly. This one left 145 probes silently in the pre-fix state while
@@ -1725,7 +1889,7 @@ worth stating as a general hazard rather than an anecdote: automation that trans
 reports <em>what it intended</em>, and unless the output is independently counted against the input,
 "0 files changed" and "145 files changed" both arrive as exit code 0.</p>
 <p><strong>Why the synchronous XHR was worth the trouble anyway.</strong> With asynchronous <code>fetch</code>, a run
-that crashed the page left <strong>nothing</strong> behind — the beacon was still queued when the renderer
+that crashed the page left <strong>nothing</strong> behind: the beacon was still queued when the renderer
 died. With the synchronous transport, every run delivers the <strong>exact point of death</strong>. That is
 directly why the FontFace branch in §12.3 could be localised to <code>document.fonts.load()</code> at all:
 without the synchronous beacon, those fifteen runs would have been fifteen silences, and the
@@ -1738,23 +1902,23 @@ new Uint8Array(id.length).length -&gt; 0        &lt;- an EMPTY array, not an err
 scan                             -&gt; 0 hits  &lt;- structural false negative
 </code></pre>
 <p><strong><code>new Uint8Array(undefined)</code> does not throw and does not warn: it produces an empty array.</strong> A
-wrong type handed to a tolerant constructor yields a emptiness that looks like a result. The
-patcher produced its false negative <em>upstream</em> — it patched nothing and said it did; this one was
+wrong type handed to a tolerant constructor yields an emptiness that looks like a result. The
+patcher produced its false negative <em>upstream</em>: it patched nothing and said it did; this one was
 produced <em>downstream</em>, inside a constructor that accepts anything. Two different points in the
 pipeline, the same silent signature.</p>
 <p>The countermeasure is the same lesson applied twice: <strong>report the type alongside the value.</strong> In
-the pixel case it was a control that printed length and type separately —</p>
+the pixel case it was a control that printed length and type separately:</p>
 <pre><code>CTRL-BASE   len=undefined  type=ImageData
 </code></pre>
-<p><strong>[device]</strong> <code>pixel-bytewrite-1400</code>, UA <code>PlayStation 5/14.00</code> — and that separate <code>type</code>
+<p><strong>[device]</strong> <code>pixel-bytewrite-1400</code>, UA <code>PlayStation 5/14.00</code>, and that separate <code>type</code>
 field is what made the <code>undefined</code> visible. Had only the count been reported, the byte channel
 would have been written off on an artifact.</p>
 <p><strong>A third instance, and the most instructive: a crash read as a broken primitive.</strong> For most of
 the engagement a page dying on a read looked like the primitive failing under some alignment or
 permission edge. Under <code>xotext</code> (§9) the reading inverts: <strong>the primitive was working
 correctly against a protection we did not know was present.</strong> The crash was information, not
-noise — it was telling us the address was code and code is not readable. We had the signal the
-whole time and had filed it under failures. <strong>[hypothesis]</strong> — the inversion is a re-reading of our own crash log through a mechanism established upstream on <code>libkernel</code>; we have not attributed individual crashes to it.</p>
+noise: it was telling us the address was code and code is not readable. We had the signal the
+whole time and had filed it under failures. <strong>[hypothesis]</strong>: the inversion is a re-reading of our own crash log through a mechanism established upstream on <code>libkernel</code>; we have not attributed individual crashes to it.</p>
 <p>The general form is worth stating: <strong>a crash is a result, and it has to be classified rather
 than discarded.</strong> A death attributed to "the primitive is flaky" closes a line of inquiry; the
 same death attributed to "the page is execute-only" opens one. The difference is not in the
@@ -1763,12 +1927,12 @@ event, only in what is done with it.</p>
 handoff, a detail that cost real runs and generalises badly. When scanning a stack for values that
 look like return addresses:</p>
 <blockquote>
-<p><strong>25 of 38 candidates</strong> were <code>libkernel+0x751D0</code> = <strong><code>__stack_chk_guard</code></strong> — a <em>data</em> word
+<p><strong>25 of 38 candidates</strong> were <code>libkernel+0x751D0</code> = <strong><code>__stack_chk_guard</code></strong>: a <em>data</em> word
 copied into many frames, not a return address.</p>
 </blockquote>
 <p><strong>[upstream]</strong> Independently confirmed there against <code>OFFSET_lk___stack_chk_guard</code>. The trap is
 the inverse of a strong intuition: a pattern that recurs across many frames <em>feels</em> like the
-loudest signal available, and here it is the weakest — it recurs precisely because it is a
+loudest signal available, and here it is the weakest: it recurs precisely because it is a
 constant being copied, not because it is the thing being sought. <strong>Frequency is evidence of
 persistence, not of identity.</strong> A candidate set that clusters hard on one value should be treated
 as having found a constant until proven otherwise.</p>
@@ -1781,7 +1945,7 @@ result was readable.</strong> A crash with no beacon is indistinguishable from a
 happened, and an empty array is indistinguishable from a scan that found nothing.</p>
 <hr />
 <h2 id="14-related-work-and-novelty-survey-already-known">14. Related work and novelty survey <code>[already known]</code></h2>
-<p>The survey was run against primary sources — GitHub's API and raw file endpoints — rather
+<p>The survey was run against primary sources (GitHub's API and raw file endpoints) rather
 than a search engine, for the reason given in §13.6.</p>
 <h3 id="141-the-community-1410-corpus">14.1 The community 14.10 corpus</h3>
 <p><code>ZigZagBoi1/PS5-14.10-Research</code> is the largest body of work in this area: an active community
@@ -1792,12 +1956,12 @@ conclusion that the info leak is "the sole remaining blocker for the entire 14.1
 Our userland findings are consistent with it and, in the <code>ntfusion</code> iterator confusion, add a
 primitive the corpus does not carry on 14.00.</p>
 <p><strong>On the kind swap, the corpus documents the technique and not the mechanism.</strong> The published
-variant analysis describes a <code>flipOidKind</code> step — flipping the OID <code>kind</code> field from
-<code>0x80048002</code> to <code>0x70048002</code> via a decrement primitive — with the offsets and intended
+variant analysis describes a <code>flipOidKind</code> step: flipping the OID <code>kind</code> field from
+<code>0x80048002</code> to <code>0x70048002</code> via a decrement primitive, with the offsets and intended
 effect, but not the branch that changes, the privilege skipped, or the fact that <code>CTLTYPE</code> is
 untouched. A targeted search is the cleanest statement of the gap: grepping all <code>.md</code>, <code>.c</code>,
 <code>.js</code> and <code>.lua</code> files for <code>ANYBODY</code>, <code>priv_check</code>, <code>PRIV_SYSCTL</code> and <code>securelevel_gt</code> returns
-<strong>no hit anywhere in connection with the sysctl kind swap</strong> — the hits that exist concern other
+<strong>no hit anywhere in connection with the sysctl kind swap</strong>: the hits that exist concern other
 handlers entirely (<code>sys 598</code>, <code>sys 612/649</code>, RDMSR, <code>PRIV_NETINET_SETHDROPTS</code>). The corpus's
 own sysctl write attempts on 14.10 all returned <code>-1</code>, and its own audit re-classifies them
 honestly as "one failed write attempt, not a survey proving all sysctl writes blocked".</p>
@@ -1812,19 +1976,19 @@ reference for §7.4: the PS5 gate order matches upstream <code>sysctl_root()</co
 ANYBODY/privilege, handler, MAC), and the selector constants match (<code>0x04000000</code> =
 <code>CTLFLAG_PRISON</code>, derived <code>esi</code> 241/242 = <code>PRIV_SYSCTL_WRITE</code>/<code>PRIV_SYSCTL_WRITEJAIL</code>). But the
 bit values verified <strong>structurally</strong> on the PS5 dump are <code>0x40000000</code>, <code>0x08000000</code>,
-<code>0x10000000</code>, <code>0x04000000</code>, <code>0x80000000</code> — the <strong>names</strong> attached to them are a FreeBSD
+<code>0x10000000</code>, <code>0x04000000</code>, <code>0x80000000</code>: the <strong>names</strong> attached to them are a FreeBSD
 convention assumption. The PS5 kernel is a Sony-modified fork; the numbering was not
 independently enumerated on the PS5 side.</p>
 <h3 id="144-novelty-verdict">14.4 Novelty verdict</h3>
 <p><strong>No prior art found that documents the kind-swap mechanism at branch level.</strong></p>
-<p>What is prior art: the swap <strong>as a technique</strong> — byte values, target offset, intended
-read-only→writable effect — published community knowledge carried since 13.60 and described in
+<p>What is prior art: the swap <strong>as a technique</strong>: byte values, target offset, intended
+read-only→writable effect, published community knowledge carried since 13.60 and described in
 the 14.10 corpus's variant analysis; the canvas reentrancy UAF, the FontFace reclaim leak, the
 DAZ blocker and the info-leak-is-the-blocker conclusion; and the <code>wk_gadgetmap</code> gadget set.</p>
 <p>What is <strong>not</strong> prior art, and is contributed here:</p>
 <ol>
-<li>The specific branch the swap moves — <code>test eax, 0x10000000</code> / <code>je</code> at <code>0xffffffff9e947f49</code>
-   — and what it guards: the <code>PRIV_SYSCTL_WRITE</code>/<code>PRIV_SYSCTL_WRITEJAIL</code> check, with the swap
+<li>The specific branch the swap moves: <code>test eax, 0x10000000</code> / <code>je</code> at <code>0xffffffff9e947f49</code>
+   and what it guards: the <code>PRIV_SYSCTL_WRITE</code>/<code>PRIV_SYSCTL_WRITEJAIL</code> check, with the swap
    setting <code>CTLFLAG_ANYBODY</code> rather than confusing a type.</li>
 <li>The CFG proof that the check block has exactly one entry and the swap closes it, with the
    three-way separation of "check denies when executed" / "our OID never executes it" / "the
@@ -1835,41 +1999,64 @@ DAZ blocker and the info-leak-is-the-blocker conclusion; and the <code>wk_gadget
 <li>The falsification of the type-field amplifier, and that the earlier abandonment rested on the
    wrong offset (<code>+0x14</code> not <code>+0x1c</code>).</li>
 <li>The <code>ntfusion</code> iterator confusion on 14.00 as a second orthogonal WebKit confusion, scoped
-   to <strong>reachability of the confusion path</strong> — not an obtained read/write object.</li>
+   to <strong>reachability of the confusion path</strong>: not an obtained read/write object.</li>
 <li>The six closed code-leak branches of §12.3, each closed by a <strong>different</strong> evidence class so
-   the set has no shared failure mode — including running upstream's <code>p563</code> verbatim to remove
+   the set has no shared failure mode, including running upstream's <code>p563</code> verbatim to remove
    interpretation as a variable, and a write-channel round-trip that measures where FTZ lives
    instead of inferring it from a null scan.</li>
-<li>The silent-false-negative case study of §13.8 — a methodological result about automated
+<li>The silent-false-negative case study of §13.8, a methodological result about automated
    exploit development, not about the PS5.</li>
 <li>The <code>xotext</code> constraint on <code>libkernel_web</code> established, and the resulting reframe of the code
-   leak from <em>reading code</em> to <em>reading data that contains code addresses</em> (§9) — including
+   leak from <em>reading code</em> to <em>reading data that contains code addresses</em> (§9), including
    the field-by-field delta stability table showing the deltas are a property of a build family,
    not of the module, and that <code>thread_list</code> moves even within 12.xx.</li>
 </ol>
 <p>The honest summary: <strong>the swap was known; why it works was not.</strong> This note supplies the
-second half, and in doing so narrows what the first half is worth — a permission bypass is a
+second half, and in doing so narrows what the first half is worth: a permission bypass is a
 smaller thing than the folklore's "makes it writable" implies, and a smaller thing stated
 precisely is more useful than a larger thing assumed.</p>
+<h3 id="145-nobody-has-written-the-1400-answer">14.5 Nobody has written the 14.00 answer</h3>
+<p>A survey of the community's own 14.10 research repository establishes that the 14.00 case is
+unaddressed rather than merely unpublished:</p>
+<pre><code>blob objects scanned                     -&gt; 8 815
+references to &quot;14.00&quot; / &quot;14_00&quot;        -&gt; 0
+kernel dumps present                   -&gt; docs/dumps_13.60/ only
+</code></pre>
+<p><strong>[static]</strong> Counted over the repository's blob store. The community works on 14.10 and dumps
+13.60. <strong>There is no decrypted 14.00 kernel anywhere public, and no written treatment of 14.00
+as a distinct target.</strong> This is why the questions in this note have no existing answer to
+stand on: the firmware has not been worked, not that the answers were missed.</p>
+<p><strong>Field state, for proportion.</strong> The community corpus carries <strong>2 901 probes</strong> and a working
+jailbreak on other firmware lines, and its own summary of the blocker is unchanged across both
+eras of the project:</p>
+<blockquote>
+<p><em>"The hard blocker named by both eras is unchanged: </em><em>no address of JS-owned memory.</em><em>"</em></p>
+</blockquote>
+<p><strong>That is the same wall this note arrives at from a different direction</strong> (§12.4), and the
+difference in position is a matter of artifact rather than insight: a live 14.00 console is in
+hand, which the surveyed corpus does not have. The blocker is shared; the target is not yet
+worked by anyone.</p>
 <hr />
 <h2 id="15-conclusion-new">15. Conclusion <code>[new]</code></h2>
 <p>Two things were established and one was corrected.</p>
 <p>The userland result is a set of confirmed primitives on PS5 14.00 in the guide browser: a
 bidirectional canvas UAF, an independent <code>TransformStream</code> iterator confusion, a bounded
-heap-pointer disclosure, and a ROP frame reaching six controlled system-call arguments — all
+heap-pointer disclosure, and a ROP frame reaching six controlled system-call arguments, all
 bounded by a sandbox that refuses workers with <code>SecurityError</code> and has no <code>SharedArrayBuffer</code>.</p>
 <p>What is missing has not changed, and it is <strong>two gaps, not one</strong>: a WebKit <strong>code leak</strong> is
-missing, and a <strong>kernel bug</strong> yielding read/write has not been found — and per §12.2 finding the
+missing, and a <strong>kernel bug</strong> yielding read/write has not been found, and per §12.2 finding the
 leak will not supply one. One caveat travels with every kernel number here: the image analysed is
-<strong>13.60</strong> and no 14.00 image exists (§12.1), so the device results stand on their own while the
-kernel characterisation remains a hypothesis. With a code leak in hand the 14.00 kernel can be
-<strong>fuzzed live from the browser</strong> (§13.7), routing around the missing image entirely — a
+<strong>13.60</strong>, and while a real 14.00 PUP has since been acquired and identified, <strong>no decrypted
+14.00 kernel image exists</strong>: the container key is a single named key away, on a console class
+we do not have (§12.1). The device results therefore stand on their own while the kernel
+characterisation remains a hypothesis. With a code leak in hand the 14.00 kernel can be
+<strong>fuzzed live from the browser</strong> (§13.7), routing around the missing image entirely: a
 proposal, not a result.</p>
 <p>The most useful product may be neither finding but the discipline behind them: run the gate
 against a known negative before trusting it on an unknown; treat a probe that never touched its
 subject as having said nothing; and when a null result shows up, check the offset before
 concluding the tool has a limit. The six closed branches of §12.3 are worth what they are only
-because each was closed by a <strong>different</strong> kind of evidence — and the largest defect found here
+because each was closed by a <strong>different</strong> kind of evidence, and the largest defect found here
 was in the engagement's own automation, where a helper missing one <code>return</code> quietly broke 125 of
 146 probes while they kept reporting normally (§13.8). Automated exploit development reports
 what it <em>intended</em>; unless output is counted against input, a patch that changed nothing and a
@@ -1878,56 +2065,56 @@ patch that changed everything both exit zero.</p>
 <h2 id="references">References</h2>
 <p><strong>Advisories</strong></p>
 <ul>
-<li>FreeBSD-SA-24:14.umtx — CVE-2024-43102, UMTX_SHM_DESTROY refcount.
+<li>FreeBSD-SA-24:14.umtx: CVE-2024-43102, UMTX_SHM_DESTROY refcount.
   <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-43102">https://nvd.nist.gov/vuln/detail/CVE-2024-43102</a>
   (CVSS 3.1 10.0 <code>AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H</code>; advisory
   <a href="https://security.freebsd.org/advisories/FreeBSD-SA-24:14.umtx.asc">https://security.freebsd.org/advisories/FreeBSD-SA-24:14.umtx.asc</a>)</li>
-<li>FreeBSD-SA-26:19.file — CVE-2026-45251, poll/select fd use-after-free.
+<li>FreeBSD-SA-26:19.file: CVE-2026-45251, poll/select fd use-after-free.
   <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-45251">https://nvd.nist.gov/vuln/detail/CVE-2026-45251</a>
   (CVSS 3.1 7.8 <code>AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H</code>; advisory
   <a href="https://security.freebsd.org/advisories/FreeBSD-SA-26:19.file.asc">https://security.freebsd.org/advisories/FreeBSD-SA-26:19.file.asc</a>)</li>
-<li>WebKit bug 313175 — CVE-2026-43720, <code>getContext()</code> re-entrancy.
+<li>WebKit bug 313175: CVE-2026-43720, <code>getContext()</code> re-entrancy.
   <a href="https://bugs.webkit.org/show_bug.cgi?id=313175">https://bugs.webkit.org/show_bug.cgi?id=313175</a>
   Upstream fix: <a href="https://github.com/WebKit/WebKit/commit/040ef6e21ffac03b6d6098e0e12354bdb5469ad1">https://github.com/WebKit/WebKit/commit/040ef6e21ffac03b6d6098e0e12354bdb5469ad1</a></li>
 </ul>
 <p><strong>Upstream source</strong></p>
 <ul>
-<li>FreeBSD <code>sys/kern/kern_sysctl.c</code> — <code>sysctl_root()</code>, permission check chain.
+<li>FreeBSD <code>sys/kern/kern_sysctl.c</code>: <code>sysctl_root()</code>, permission check chain.
   <a href="https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/kern/kern_sysctl.c">https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/kern/kern_sysctl.c</a></li>
-<li>FreeBSD <code>sys/sys/sysctl.h</code> — <code>CTLTYPE</code>, <code>CTLFLAG_RD/WR/DORMANT/ANYBODY/SECURE/PRISON</code>.
+<li>FreeBSD <code>sys/sys/sysctl.h</code>: <code>CTLTYPE</code>, <code>CTLFLAG_RD/WR/DORMANT/ANYBODY/SECURE/PRISON</code>.
   <a href="https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/sys/sysctl.h">https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/sys/sysctl.h</a></li>
-<li>FreeBSD <code>sys/sys/priv.h</code> — <code>PRIV_SYSCTL_WRITE</code> 241, <code>PRIV_SYSCTL_WRITEJAIL</code> 242.
+<li>FreeBSD <code>sys/sys/priv.h</code>: <code>PRIV_SYSCTL_WRITE</code> 241, <code>PRIV_SYSCTL_WRITEJAIL</code> 242.
   <a href="https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/sys/priv.h">https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/sys/priv.h</a></li>
-<li>FreeBSD <code>sys/security/mac/mac_system.c</code> — <code>mac_system_check_sysctl()</code>.
+<li>FreeBSD <code>sys/security/mac/mac_system.c</code>: <code>mac_system_check_sysctl()</code>.
   <a href="https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/security/mac/mac_system.c">https://raw.githubusercontent.com/freebsd/freebsd-src/stable/13/sys/security/mac/mac_system.c</a></li>
 </ul>
 <p><strong>Community sources</strong></p>
 <ul>
-<li><code>1nk1/PS5-Prolapse</code> — working jailbreak, hardware-verified on 13.60.
+<li><code>1nk1/PS5-Prolapse</code>: working jailbreak, hardware-verified on 13.60.
   <a href="https://github.com/1nk1/PS5-Prolapse">https://github.com/1nk1/PS5-Prolapse</a></li>
-<li><code>docs/PROJECT_HANDOFF.md</code> §9.2 — the <code>xotext</code> constraint and the parked-stack delta method.</li>
-<li><code>tools/lkfind.js</code> — signature scanner, method-validated 6/6 against a synthetic image.</li>
-<li><code>tools/lkfind.js</code> <code>EXPECT</code> table — the per-firmware delta values behind the
+<li><code>docs/PROJECT_HANDOFF.md</code> §9.2: the <code>xotext</code> constraint and the parked-stack delta method.</li>
+<li><code>tools/lkfind.js</code>: signature scanner, method-validated 6/6 against a synthetic image.</li>
+<li><code>tools/lkfind.js</code> <code>EXPECT</code> table: the per-firmware delta values behind the
     field-by-field stability table in §9.3.</li>
-<li><code>ZigZagBoi1/PS5-14.10-Research</code> — community 14.10 research corpus (2,901 probes,
+<li><code>ZigZagBoi1/PS5-14.10-Research</code>: community 14.10 research corpus (2,901 probes,
   3,245 captures, 155 merged PRs).
   <a href="https://github.com/ZigZagBoi1/PS5-14.10-Research">https://github.com/ZigZagBoi1/PS5-14.10-Research</a></li>
-<li><code>docs/WEBKIT_INFO_LEAK_STRATEGY.md</code> (2026-10-31) — the info-leak blocker.</li>
-<li><code>docs/BROWSER_ENTRY_INFRA_2026-10-19.md</code> — the shell-domain entry analysis.</li>
-<li><code>docs/research/relapse_variant_analysis.md</code> (2026-10-18) — <code>flipOidKind</code>, technique
+<li><code>docs/WEBKIT_INFO_LEAK_STRATEGY.md</code> (2026-10-31): the info-leak blocker.</li>
+<li><code>docs/BROWSER_ENTRY_INFRA_2026-10-19.md</code>: the shell-domain entry analysis.</li>
+<li><code>docs/research/relapse_variant_analysis.md</code> (2026-10-18): <code>flipOidKind</code>, technique
     without mechanism.</li>
-<li><code>kuzibelit/PS5-14.00-14.10-Jailbreak-PoC</code> — "publapse" AIO lifecycle harness.
+<li><code>kuzibelit/PS5-14.00-14.10-Jailbreak-PoC</code>: "publapse" AIO lifecycle harness.
   <a href="https://github.com/kuzibelit/PS5-14.00-14.10-Jailbreak-PoC">https://github.com/kuzibelit/PS5-14.00-14.10-Jailbreak-PoC</a></li>
-<li><code>shad0w-rev/shadow-ps4</code> — PS4/PS5 exploit hosts, patchsets to 1400.
+<li><code>shad0w-rev/shadow-ps4</code>: PS4/PS5 exploit hosts, patchsets to 1400.
   <a href="https://github.com/shad0w-rev/shadow-ps4">https://github.com/shad0w-rev/shadow-ps4</a></li>
-<li>Relapse / <code>ntfargo</code> — <code>syscall_map</code>, <code>wk_gadgetmap</code>, WebKit structured-clone stage.</li>
-<li><code>ntfargo</code> (July 2026) — <code>ntfusion</code> iterator confusion, PS5 6.00+ / PS4 10.00+.</li>
+<li>Relapse / <code>ntfargo</code>: <code>syscall_map</code>, <code>wk_gadgetmap</code>, WebKit structured-clone stage.</li>
+<li><code>ntfargo</code> (July 2026): <code>ntfusion</code> iterator confusion, PS5 6.00+ / PS4 10.00+.</li>
 </ul>
 <p><strong>Tools</strong></p>
 <ul>
-<li>Capstone Engine 5.0.7 — x86-64 disassembly. <a href="https://www.capstone-engine.org/">https://www.capstone-engine.org/</a></li>
-<li>GNU Binutils <code>objdump</code> — binary-target disassembly cross-check.</li>
-<li>AdGuard Home — DNS rewrite for the guide entry path.
+<li>Capstone Engine 5.0.7: x86-64 disassembly. <a href="https://www.capstone-engine.org/">https://www.capstone-engine.org/</a></li>
+<li>GNU Binutils <code>objdump</code>: binary-target disassembly cross-check.</li>
+<li>AdGuard Home: DNS rewrite for the guide entry path.
   <a href="https://github.com/AdguardTeam/AdGuardHome">https://github.com/AdguardTeam/AdGuardHome</a></li>
 </ul>
 <p><strong>Engagement evidence (host: <code>ai-srv:/opt/AGENTS/Ares/engagements/ps5-1400-kernel/</code>)</strong></p>
@@ -1977,5 +2164,5 @@ kernel/kernel-13.60-live.bin
 CONSOLE_RUNBOOK.md
 </code></pre>
 </main>
-<footer><div class="wrap"><a class="logolink" href="https://morinicomputers.com" target="_blank" rel="noopener" title="Morini Computers"><img src="data:image/png;base64,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" alt="Morini Computers"></a> <div>Morini Computers &mdash; Offensive Security &nbsp;&middot;&nbsp; <a href="https://github.com/logicalpeyote777/ps5-14.00-jailbreak-research">source on GitHub</a></div></div></footer>
+<footer><div class="wrap"><a class="logolink" href="https://morinicomputers.com" target="_blank" rel="noopener" title="Morini Computers"><img src="data:image/png;base64,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" alt="Morini Computers"></a> <div>Morini Computers / Offensive Security &nbsp;&middot;&nbsp; <a href="https://github.com/logicalpeyote777/ps5-14.00-jailbreak-research">source on GitHub</a></div></div></footer>
 </body></html>
