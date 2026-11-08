@@ -2316,6 +2316,32 @@ different build and different year. **It is a strong indicator of family behavio
 proof about 14.00.** Anything it says about the console is a prediction the device has to
 confirm, and the two are kept apart in every claim below.
 
+**Its reach, measured.** A bare `jsc_context_new()` exposes no DOM and no serialisation surface.
+Twelve names probed with `typeof` on the global object:
+
+```
+history            undefined      structuredClone    undefined
+postMessage        undefined      MessageChannel     undefined
+Worker             undefined      location           undefined
+document           undefined    navigator          undefined
+window             undefined    localStorage       undefined
+fetch              undefined    Blob               undefined
+```
+
+Calling it confirms rather than implies: `structuredClone({a:1})` raises
+`ReferenceError: Can't find variable: structuredClone`. **The context is not broken, it is bare:
+`typeof Symbol` is `function`, `typeof Proxy` is `function`, `typeof JSON` is `object`.** Pure
+JavaScript is fully present; the browser half is simply absent.
+
+**The reach boundary is therefore clean and worth stating before the testbed is used for anything
+else.** It answers pure-JS questions: the Symbol gate, the read-window law, getter mechanics, the
+typed-array boundary. **The serialisation and DOM surface, `history.state`, `postMessage`,
+`structuredClone`, `Worker`, is device-only, because the bare JSC context does not expose it.**
+A route that runs through `history.state` as an address-of vector is a device probe and not a
+testbed question, and no amount of local iteration substitutes for the console there. **The contrast is on the record from the other side: `structuredClone` is present on the PS5
+14.00 device (§11) and absent from this context.** The serialisation surface exists on the target
+and not in the testbed, which is the boundary in its clearest form.
+
 
 ---
 

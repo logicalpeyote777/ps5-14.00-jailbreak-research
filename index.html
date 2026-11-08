@@ -2600,6 +2600,27 @@ iterating on a question and queueing it.</strong></p>
 different build and different year. <strong>It is a strong indicator of family behaviour and not a
 proof about 14.00.</strong> Anything it says about the console is a prediction the device has to
 confirm, and the two are kept apart in every claim below.</p>
+<p><strong>Its reach, measured.</strong> A bare <code>jsc_context_new()</code> exposes no DOM and no serialisation surface.
+Twelve names probed with <code>typeof</code> on the global object:</p>
+<pre><code>history            undefined      structuredClone    undefined
+postMessage        undefined      MessageChannel     undefined
+Worker             undefined      location           undefined
+document           undefined    navigator          undefined
+window             undefined    localStorage       undefined
+fetch              undefined    Blob               undefined
+</code></pre>
+<p>Calling it confirms rather than implies: <code>structuredClone({a:1})</code> raises
+<code>ReferenceError: Can't find variable: structuredClone</code>. <strong>The context is not broken, it is bare:
+<code>typeof Symbol</code> is <code>function</code>, <code>typeof Proxy</code> is <code>function</code>, <code>typeof JSON</code> is <code>object</code>.</strong> Pure
+JavaScript is fully present; the browser half is simply absent.</p>
+<p><strong>The reach boundary is therefore clean and worth stating before the testbed is used for anything
+else.</strong> It answers pure-JS questions: the Symbol gate, the read-window law, getter mechanics, the
+typed-array boundary. <strong>The serialisation and DOM surface, <code>history.state</code>, <code>postMessage</code>,
+<code>structuredClone</code>, <code>Worker</code>, is device-only, because the bare JSC context does not expose it.</strong>
+A route that runs through <code>history.state</code> as an address-of vector is a device probe and not a
+testbed question, and no amount of local iteration substitutes for the console there. <strong>The contrast is on the record from the other side: <code>structuredClone</code> is present on the PS5
+14.00 device (§11) and absent from this context.</strong> The serialisation surface exists on the target
+and not in the testbed, which is the boundary in its clearest form.</p>
 <hr />
 <h2 id="14-related-work-and-novelty-survey-already-known">14. Related work and novelty survey <code>[already known]</code></h2>
 <p>The survey was run against primary sources (GitHub's API and raw file endpoints) rather
