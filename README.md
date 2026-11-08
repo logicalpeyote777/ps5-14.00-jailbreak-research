@@ -1,5 +1,8 @@
 # Reading the Gate, Not the Lock: The `sysctl` Kind Swap on PlayStation 5 Firmware 14.00
 
+> **Read the formatted edition (Morini Computers template):** <https://logicalpeyote777.github.io/ps5-1400-sysctl-kind-swap/>
+
+
 **Research:** logicalpeyote — Morini Computers
 **Engagement:** `ps5-1400-kernel`
 **Dates:** 2026-11-06 → 2026-11-07
