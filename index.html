@@ -137,6 +137,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#125-typed-interfaces-return-their-own-type-not-the-memory-beneath">12.5 Typed interfaces return their own type, not the memory beneath</a></li>
 <li><a href="#126-the-rop-prerequisite-list-collapses-from-four-to-two">12.6 The ROP prerequisite list collapses from four to two</a></li>
 <li><a href="#127-a-different-class-of-read-type-conversion-rather-than-a-memory-window">12.7 A different class of read: type conversion rather than a memory window</a></li>
+<li><a href="#128-the-carrier-abliterated-on-real-jsc-and-a-prediction-the-device-can-falsify">12.8 The carrier abliterated on real JSC, and a prediction the device can falsify</a></li>
 </ul>
 </li>
 </ul>
@@ -151,6 +152,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#136-cve-existence-by-direct-query">13.6 CVE existence by direct query</a></li>
 <li><a href="#137-fuzzing-the-live-kernel-from-the-browser-proposed-not-executed">13.7 Fuzzing the live kernel from the browser (proposed, not executed)</a></li>
 <li><a href="#138-the-patcher-that-did-not-patch-a-silent-false-negative-at-scale">13.8 The patcher that did not patch: a silent false negative at scale</a></li>
+<li><a href="#139-a-local-jsc-testbed-a-second-engine-for-iteration">13.9 A local JSC testbed: a second engine for iteration</a></li>
 </ul>
 </li>
 <li><a href="#14-related-work-and-novelty-survey-already-known">14. Related work and novelty survey [already known]</a><ul>
@@ -1898,6 +1900,48 @@ localises the primitive precisely: whatever Prolapse relies on is in the carrier
 the check that this device passes nothing through.</p>
 <p><strong>Closing a class empirically is what makes the next class visible.</strong> The three negatives were
 not a dead end; they were the boundary that put this one in view.</p>
+<h3 id="128-the-carrier-abliterated-on-real-jsc-and-a-prediction-the-device-can-falsify">12.8 The carrier abliterated on real JSC, and a prediction the device can falsify</h3>
+<p>The ablation was run against a real JavaScriptCore (§13.9) rather than against V8, to see
+whether the gate that blocks the confusion-by-call read is a family property of JSC.</p>
+<pre><code class="language-json">[{&quot;label&quot;:&quot;V0-Object(7)&quot;,&quot;cls&quot;:&quot;[object Number]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;},
+ {&quot;label&quot;:&quot;SCOPE&quot;,&quot;cls&quot;:&quot;object&quot;},
+ {&quot;label&quot;:&quot;V1-full-carrier&quot;,&quot;cls&quot;:&quot;[object Number]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;},
+ {&quot;label&quot;:&quot;V2-no-slots&quot;,&quot;cls&quot;:&quot;[object Number]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;},
+ {&quot;label&quot;:&quot;V3-only-slot0&quot;,&quot;cls&quot;:&quot;[object Number]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;},
+ {&quot;label&quot;:&quot;V4-bare-fn&quot;,&quot;cls&quot;:&quot;[object Number]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;},
+ {&quot;label&quot;:&quot;V5-scope-itself&quot;,&quot;cls&quot;:&quot;[object Object]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;}]
+</code></pre>
+<p><strong>Two results, both new.</strong> The scope leak works on real JSC: <code>SCOPE: object</code>, not <code>undefined</code>.
+<strong>The receiver passes through the Proxy trap on JSC exactly as it does on V8, so the mechanism
+was never broken; what fails elsewhere is the <code>this</code> binding of a bare call, not the trick.</strong></p>
+<p><strong><code>symbolToString</code> throws on all six carrier variants.</strong> <code>Object(scope.g)</code> is <code>[object Number]</code>
+on real JSC as well: <strong>the carrier does not change the class of the wrapper.</strong> The first ablation
+used 4096 slots, which left open the possibility that a large butterfly changes indexing
+behaviour. Retested at the real value, <code>CARRIER_SLOTS = 9000000</code>, 72 MB of butterfly:</p>
+<pre><code class="language-json">[{&quot;label&quot;:&quot;BIG-9M-slots&quot;,&quot;cls&quot;:&quot;[object Number]&quot;,&quot;ts&quot;:&quot;THROWS:TypeError&quot;},
+ {&quot;label&quot;:&quot;carrier-length&quot;,&quot;cls&quot;:&quot;0&quot;}]
+</code></pre>
+<p><strong>Nine million slots change nothing.</strong></p>
+<p><strong>The contradiction this leaves, and its weight.</strong> The assignment chain in <code>core.js</code> is linear:</p>
+<pre><code class="language-js">getterCarrier = function getterCarrierFunction() { return 7; };   // :666
+preparedSymbolObject = prepareSymbolWrapper(getterCarrier);       // :679
+// -&gt; Object(leakedScope.g) -&gt; getter returns 7 -&gt; Object(7) -&gt; Number
+capturedString = symbolToString.call(preparedSymbolObject);       // :691
+</code></pre>
+<p><strong>On JSC 2.52.3 this sequence throws. Prolapse is hardware-verified on 13.60. The PS5 14.00
+device throws 257 <code>TypeError</code>s at the same gate.</strong> The gate is present on the local JSC and on
+the console, and those two agree with each other.</p>
+<p><strong>That leaves a prediction with a definite shape rather than a vague possibility: the JSC in
+13.60 did not have this check and the JSC in 14.00 added it.</strong> If so, <strong>Prolapse's <code>addrof</code>
+works on 13.60 and does not work on 14.00</strong>, and the device can falsify it. The alternative is
+that <code>core.js</code> is being misread, which is less likely given a linear assignment chain that has
+been read twice.</p>
+<p><strong>What is claimed and what is not.</strong> The local testbed is JSC 2.52.3 GTK, not the PS5's JSC:
+same family, different build, different year. <strong>It is a strong indicator of family behaviour,
+not a proof about 14.00.</strong> The 257 device records are the 14.00 evidence; the local run says
+the family behaves this way elsewhere. <strong>The prediction is precise, the confirmation belongs to
+the device, and a 13.60 console is the only thing that can settle which firmware introduced the
+check.</strong></p>
 <hr />
 <h1 id="part-iii-method-related-work-conclusion">Part III : Method, related work, conclusion</h1>
 <h2 id="13-methodology-new">13. Methodology <code>[new]</code></h2>
@@ -2273,6 +2317,57 @@ classification of what the probe already returned.</p>
 <p>The two facts are the same fact from either side: <strong>the transport determined whether a negative
 result was readable.</strong> A crash with no beacon is indistinguishable from a crash that never
 happened, and an empty array is indistinguishable from a scan that found nothing.</p>
+<hr />
+<h3 id="139-a-local-jsc-testbed-a-second-engine-for-iteration">13.9 A local JSC testbed: a second engine for iteration</h3>
+<p>A real JavaScriptCore exists on the research host and can be driven without a device:</p>
+<pre><code>JavaScriptCore 2.52.3 (WebKitGTK)  libjavascriptcoregtk-4.1.so.0.10.11
+31 959 344 B · 132 jsc_ symbols · /lib/x86_64-linux-gnu
+No JSk typelib installed -&gt; raw ctypes with explicit restype
+</code></pre>
+<p><strong>[static]</strong> Symbols verified present: <code>jsc_virtual_machine_new</code>,
+<code>jsc_context_new_with_virtual_machine</code>, <code>jsc_context_evaluate</code>, <code>jsc_value_to_string</code>,
+<code>jsc_context_get_exception</code>.</p>
+<p><strong>Two traps sit between the library and a working call, and both are in the caller rather than
+the environment.</strong> The first is silent pointer truncation: <code>jsc_context_new()</code> returned
+<code>1010280912</code>, which is a 64-bit pointer truncated to 32 bits, because ctypes defaults the
+return type to <code>c_int</code>. Declaring <code>restype = c_void_p</code> yields the full pointer (<code>0x2d5c1780</code>)
+and construction succeeds. <strong>A truncated handle does not look wrong; it looks like a large
+integer.</strong></p>
+<p>The second is the entry-point signature. Three were tested, each in an isolated subprocess so a
+crash could not take the harness with it:</p>
+<table>
+<thead>
+<tr>
+<th>Signature</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>(ctx, script)</code></td>
+<td>core dump</td>
+</tr>
+<tr>
+<td><code>(ctx, script, &amp;error)</code></td>
+<td>core dump</td>
+</tr>
+<tr>
+<td><strong><code>(ctx, script, length, &amp;error)</code></strong></td>
+<td><strong>OK, returns <code>0x2fa90fe0</code></strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The blocker was the argument list, not GLib or GTK initialisation.</strong> A device-free route to
+JS-level questions was available the whole time and was being kept shut by a wrong prototype.</p>
+<p><strong>What the testbed is for.</strong> It answers JS-level questions in seconds with no console reopen:
+ablation ladders, carrier shapes, engine behaviour under a given construct. Seven ablation
+variants ran in about a second (§12.8), against a device cost of one page load per variant.
+<strong>It is a second iteration engine sitting beside the device, and it is the difference between
+iterating on a question and queueing it.</strong></p>
+<p><strong>Its limit, stated with the result.</strong> JSC 2.52.3 GTK is not the PS5's JSC: same family,
+different build and different year. <strong>It is a strong indicator of family behaviour and not a
+proof about 14.00.</strong> Anything it says about the console is a prediction the device has to
+confirm, and the two are kept apart in every claim below.</p>
 <hr />
 <h2 id="14-related-work-and-novelty-survey-already-known">14. Related work and novelty survey <code>[already known]</code></h2>
 <p>The survey was run against primary sources (GitHub's API and raw file endpoints) rather
