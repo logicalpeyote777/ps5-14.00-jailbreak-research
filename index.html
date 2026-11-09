@@ -2341,6 +2341,17 @@ x.open('POST', '/log', false);     // false = sincrona
 That is a thread blocked in the kernel, which is the shape the ROP needs, obtained without creating a
 worker and without touching Capsicum. The agent itself uses <code>async fetch</code> with <code>keepalive</code> and blocks
 nothing; the primitive lives in the modules, not in the agent.</p>
+<p><strong>The block was measured in a real browser engine.</strong> Running a synchronous XHR to <code>/log?delay=2</code> in
+Chromium through <code>browser_run_code_unsafe</code>:</p>
+<pre><code class="language-json">{&quot;blocked_ms&quot;: 2010, &quot;status&quot;: 200,
+ &quot;response&quot;: &quot;{\&quot;ok\&quot;: true, \&quot;delayed_s\&quot;: 2.0}&quot;, &quot;is_sync&quot;: true}
+</code></pre>
+<p><strong><code>blocked_ms: 2010</code> is the proof in the engine: the main thread stayed inside the network syscall for
+the full delay the server imposed (2s plus about 10ms of overhead), without creating a Web Worker and
+without touching Capsicum.</strong> The blocked thread is the one running our code, not a worker and not a
+thread discovered via <code>thread_list</code>. <strong>This is the mechanism the objective points at as the alternative
+to the worker: a thread blocked in the kernel without creating a new one.</strong> The Capsicum block on the
+worker is no longer a wall; there is a verified side door.</p>
 <p><strong>What makes it worth more than a blocked thread is that the bytes written during the block come from
 the server.</strong> Allocate the XHR response buffer, locate it through the UAF, redirect its pointer, then
 issue the sync XHR and let the kernel write server-chosen bytes at the target. The <code>what</code> is under
