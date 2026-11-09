@@ -3814,6 +3814,17 @@ independently verified offset: the real PID is read first, the canary written, r
 restored, so the round trip is verifiable twice on a target whose offset is known and whose value is
 restorable.</strong> <strong>The write width is eight bytes exactly: <code>write_qword</code> to <code>write_buffer</code> to <code>copyin</code> to
 <code>syscall.write(..., len=8)</code>, not the twenty bytes an earlier draft claimed.</strong>**</p>
+<p><strong>The loader carries its own gate that mirrors the goal's own criterion.</strong> <strong><code>check_kernel_rw</code>
+(<code>kernel.lua:355</code>) calls <code>is_kernel_rw_available</code> (<code>:352</code>), which returns <code>kernel.read_buffer and
+kernel.write_buffer</code>: a strict <code>and</code> that is true only when both the read and the write buffers are
+present.</strong> <strong>A primitive with only the read side, or only the write side, fails the gate and raises the
+named error <code>kernel r/w is not available</code>.</strong> <strong>The gate is called before every jailbreak step that touches
+the kernel: <code>find_proc_by_name</code> (<code>:366</code>), the kernel-address helpers (<code>:386</code>, <code>:408</code>, <code>:420</code>), and
+<code>run_with_ps5_syscall_enabled</code> (<code>:438</code>).</strong> <strong>This is the same <code>and</code> the goal states: the objective is
+arbitrary read AND write, and the gate will not let the jailbreak proceed on a half primitive.</strong> <strong>If the
+ipv6 primitive initializes both buffers the gate passes and the jailbreak runs; if it initializes only one,
+the gate errors before any kernel write happens, so a partial primitive stops with a named reason rather
+than corrupting the kernel with a one-directional view.</strong></p>
 <p><strong>A false alarm was cleared on the way.</strong> A first grep, filtered too tightly over a file with many prints,
 suggested the test never printed <code>TEST2 PASS</code> and only printed <code>round-trip OK</code>, which would have meant a
 marker mismatch: the runner would log the round trip as proved yet return false, throwing the goal away.
