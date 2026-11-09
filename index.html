@@ -1997,6 +1997,23 @@ if (name === &quot;pop_rsp&quot; &amp;&amp; W.gadgets &amp;&amp; W.gadgets.pop_r
 </code></pre>
 <p><strong>An absent gadget in a pattern is not an absent capability.</strong> The adapter takes WebKit's <code>pop
 rsp</code> as an absolute address rather than searching for an equivalent byte pattern.</p>
+<p><strong>But the host in that snippet is Prolapse's, and ours never grew the provider.</strong> <code>gadgets</code> appears
+zero times across the 168-module library, the agent page and the static page. <code>W</code> does appear six
+times in our probes, and it is not that <code>W</code>:</p>
+<pre><code class="language-js">const noCoW = 13.37;                              // copy-on-write test
+var hiW = parseInt(parts.slice(0, 8), 16),
+    loW = parseInt(parts.slice(8, 16), 16);        // word parsing
+var W = 16, H = 16;                               // canvas width and height
+function pxOff(x, y) { return (y * W + x) * 4; }
+</code></pre>
+<p><strong><code>W</code> in our harness is a canvas width.</strong> A ROP module doing <code>W.gadgets.pop_rsp</code> here finds
+<code>(16).gadgets</code>, which is <code>undefined</code>, then throws on <code>.pop_rsp</code>. <strong>The variable exists, the name
+matches, and the meaning is entirely different</strong>, which is the shape of false lead that costs hours.</p>
+<p><strong>So the browser ROP needs a host gadget provider our harness never built.</strong> The gadget is not missing
+from the console; the channel that delivers it to the module is. And the paradox in filling the gap is
+that computing <code>base + offset</code> needs the gadget's offset inside WebKit, which comes from the
+<code>wk_gadgetmap</code>, whose byte scan is killed by execute-only text. <strong>A provider solves how to deliver it,
+not how to find it.</strong> The wall stays where it was, one level over.</p>
 <p><strong>The EXPECT table does not reach 14.00.</strong> <code>tools_lkfind.js</code> carries <code>pop_rsp: 0x343AA</code> for
 10.00 and <code>null</code> for 12.00/12.40, with aliases only across 12.02/12.20/12.60/12.70.
 <code>grep -cE '"1[34]\.'</code> over the table returns <strong>0</strong>: no 13.x entry and no 14.x entry exists,
