@@ -2946,7 +2946,83 @@ device.**
 
 **What the analysis does change is where the risk sits, and that is worth more than the coverage
 number.** **The robust part is robust by construction. The risk is concentrated in the exploit
-payload, not in the offsets.**
+payload, not in the offsets.** Naming that payload precisely changes the estimate again, and
+downward.
+
+**Only one component feeds the loader.** The loader reads `storage.get("kernel_rw")`, and across
+the whole save data exactly one file writes that key:
+
+| Payload | Writes `storage["kernel_rw"]` | Consumed by the loader |
+|---|---|---|
+| **`lapse.lua`** | **Yes, at `:2043`** | **Yes** |
+| `p2jb.lua` plus `ps5-kexp.bin` | No, in-memory only at `:987-988` | **No** |
+
+**`ps5-kexp.bin` is a genuine kernel exploit rather than a setup payload.** It is raw x86-64,
+18 912 bytes, and its own strings describe an IOMMU path: find the device `softc`, initialise the
+IOMMU, and use MMIO register writes as the kernel write primitive, then patch the jailbreak flags
+`security_flags`, `target_id`, `qa_flags` and `utoken_flags`. **It does its own complete runtime
+discovery, independent of the loader's offset table, and it reads `kern.sdk_version` at runtime
+with an explicit forward-compatibility fallback: *"kernel data base defaults to krodata in
+future"*.** On the offset front it is more robust than the loader's table. **But it is native code
+and cannot call the Lua `storage`, and its driver `p2jb.lua` sets the read/write helpers in memory
+without ever writing the storage key. So `ps5-kexp.bin` sits in the Test 2 save dormant: nothing
+in the save data invokes it, and the loader never sees the capability it produces.**
+
+**The declared ceiling of the one payload that does feed the loader is well below the target.** The
+project's own payload README gives PS5 support as `umtx` up to 7.61 and `lapse` up to 10.01, with
+`p2jb` undocumented. **The target 14.00 is four major versions above the declared ceiling of the
+only exploit that can hand state to the loader.**
+
+**That ceiling is a tested boundary rather than a hard gate, and the difference decides whether the
+payload even runs.** `lapse.lua` carries no upper bound in code. The only version test is
+`if tonumber(FW_VERSION) >= 7 or force_kdata_patch_with_gpu then` at `:1955`, which is
+forward-compatible: 14 satisfies it. Beyond that there are two platform ternaries and no per-firmware
+table at all. **So `lapse.lua` will attempt to run on 14.00. The gate is not the code. The gate is
+the vulnerability.**
+
+**LAPSE is an AIO double-free disclosed in 2023.** **Sony has had four major firmware cycles in
+which to patch it.** If it is patched, the double-free does not occur and the exploit dies at that
+point, with no offset or discovery failure to blame. **The fragility here is temporal rather than
+structural: the code is version-agnostic and will try, and what is being bet on is whether a
+vulnerability disclosed more than two years ago is still live.**
+
+**Revised estimate, with the earlier number kept visible rather than quietly replaced.**
+
+| Scenario | Probability on 14.00 | Basis |
+|---|---|---|
+| The `ipv6_kernel_rw` primitive, **given** an exploit has run | **~85-90%** | hardcoded offsets, 48 firmware versions with no layout variation |
+| `lapse.lua` completing the cycle on 14.00 | **~25-40%** | declared ceiling 10.01 against a 14.00 target; vulnerability two or more years old; code is agnostic so it will try, but the vulnerability is the gate |
+| `ps5-kexp.bin` completing the cycle | **~30-45%** | robust runtime discovery plus an explicit fallback, but the IOMMU vulnerability's patch status is unknown |
+| **Test 2 passing overall** | **~25-40%** | dominated by the requirement that an exploit run **and** hand state to storage |
+
+**The offset analysis was not wrong; it was answering a narrower question.** The offsets are
+~85-90% because they were never per-firmware. **Test 2 as a whole is ~25-40% because upstream of
+those offsets sits an exploit whose declared window stops at 10.01.**
+
+**The sequence that actually runs Test 2 is therefore not a save boot.** `lapse.lua` is not in the
+save and has to be pushed over the network:
+
+```
+foothold (Test 1) -> port 9026 open
+  -> send lapse.lua            (exploit + storage.set)
+  -> send test2_kernel_rw.lua  (goal verification)
+```
+
+**The Test 2 save on its own does not reach kernel read/write.** It carries the loader and the
+dormant `ps5-kexp.bin`; the exploit has to arrive over TCP after the foothold lands.
+
+**What a failure would tell us, which is why the test is worth running even at these odds.** If
+`lapse.lua` dies at the double-free, that is evidence that LAPSE is patched on 14.00. **A negative
+there is not a wasted run: it closes this route with a specific reason and moves the search to a
+newer PS5 exploit.** `p2jb.lua` with `ps5-kexp.bin` remains the fallback, but it needs its
+handoff adapted, either by making it write the storage key or by consuming its read/write directly
+instead of going through `initialize_kernel_rw`.
+
+**The final boundary, stated plainly.** It is not offset coverage, which is robust by construction.
+It is not the foothold, which is engine behaviour and does not age with the firmware. **It is a
+single 2023 vulnerability that has to still be live on a firmware Sony has patched four times.**
+**No offline analysis reaches that answer. The first `send lapse.lua` either completes the
+double-free or dies there, and that is the only measurement that settles it.**
 
 **Current state.** Two saves are built and verified on disk. **Test 1** carries the foothold and is
 expected to report Lua injection success. **Test 2** carries the complete loader: `inject.iet`
