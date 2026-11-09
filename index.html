@@ -2697,6 +2697,26 @@ the findings.</p>
 makes crash isolation a property of the system rather than of the module, and the two-layer
 watchdog means neither a crash nor a hang stops the queue. The engagement ran unattended after
 one page load.</p>
+<p><strong>The full loop was run against the probe server in a real browser engine rather than only in the
+Node shim, and it completes end to end:</strong></p>
+<pre><code>agent_boot -&gt; plan_start -&gt; pg_begin -&gt; pg_end -&gt; test_result -&gt; plan_done
+</code></pre>
+<p><strong>The loop iterates every test in the plan, <code>for (const t of tests)</code> with no early exit other than
+the operator flag, so the worry that only the first test ran was wrong: the log tail was interleaved
+across several boots from repeated navigations and made a partial cycle look like the whole run.</strong></p>
+<p><strong><code>test_result.result</code> is <code>undefined</code> across all 325 recorded events and that is expected, not a lost
+payload.</strong> The probe modules report their content through their own <code>pg_end</code> channel and terminate on
+a POST rather than a <code>return</code>. <code>test_result</code> carries execution state (<code>ok</code>, <code>ms</code>, <code>error</code>), not the
+probe's finding. <strong>Reading it as though it should contain the probe result concludes the data is lost
+when it is not.</strong></p>
+<p><strong>One residual: the completed cycle emits two <code>pg_end</code> events for <code>stable-byteview-1400</code>, one with
+<code>STABLE-DUAL-VIEW-OURS</code> and one with <code>error</code>.</strong> The first is the real outcome; the module emits
+twice. It does not invalidate the result but an automated report would show an error line beside a
+positive outcome.</p>
+<p><strong>What this excludes beforehand: if the agent fails to start on 14.00, the cause is not the loop
+logic, because the loop has been executed end to end in a real browser.</strong> What remains device-only is
+by definition what Chromium does not reproduce, the Capsicum worker <code>SecurityError</code> and the
+execute-only text.</p>
 <h3 id="132-differential-baseline-against-patched-chromium">13.2 Differential baseline against patched Chromium</h3>
 <p>Every module runs against patched desktop Chromium (headless, fetch shim on the report channel)
 before it runs against the console. The reading rule:</p>
