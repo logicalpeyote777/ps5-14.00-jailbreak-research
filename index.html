@@ -3778,6 +3778,25 @@ mapping it; without that mapping there is no executable memory for the kexp.</st
 whether <code>jitshm_create</code> or <code>scePthreadCreate</code> behave differently on 14.00; if the JIT mapping is not
 executable or the thread create fails, the kexp does not run and the failure is visible in the
 <code>pthread_create ret</code> line the payload prints.</strong></p>
+<p><strong>What the kexp does once it runs was read from its own disassembly (<code>objdump -D -b binary
+-m i386:x86-64</code> on the 18912-byte <code>ps5-kexp.bin</code>).</strong> <strong>It performs three steps, each with a named error
+string that identifies which native step failed.</strong> <strong>First an IOMMU init (<code>init iommu started</code> through
+<code>iommu_write</code>/<code>iommu_write_pa</code> to <code>init iommu completed</code>, with <code>unable to init iommu !!</code> on failure).</strong>
+<strong>Then the qa_flags patch: it locates four flag pointers (<code>security_flags_ptr</code>, <code>target_id_ptr</code>,
+<code>qa_flags_ptr</code>, <code>utoken_flags_ptr</code>), prints a <code>before qaf</code> line, writes the new values, and prints an
+<code>after qaf</code> line, ending in <code>qa flags patches applied !!</code> or <code>unable to patch qa flags !!</code>.</strong> <strong>Then it
+creates the elfldr thread (<code>failed to create elfldr thread !!</code> on failure).</strong></p>
+<p><strong>The qa_flags patch is the native jailbreak, and its signature is a magic value.</strong> <strong>The disassembly at
+<code>0x1043</code> through <code>0x10ca</code> shows the kernel write helper (<code>call 0x1890</code>) storing the constant
+<code>0x13370000</code> at <code>qa_flags_base + 0xc0</code>, with further writes at <code>+0x100</code>, <code>+0x104</code> and <code>+0x200</code>.</strong>
+<strong>The pointers to the qa_flags structure are located at runtime, but the offsets inside the structure where
+the patch writes are hardcoded in the kexp.</strong> <strong>This is the point of fragility for 14.00: if the qa_flags
+layout changed, those hardcoded offsets land on the wrong fields, and the patch either fails with
+<code>unable to patch qa flags !!</code> or writes a value that does not enable the jailbreak.</strong> <strong>The kexp's own
+<code>before qaf</code>/<code>after qaf</code> readback shows whether the patch took: if <code>after qaf</code> is unchanged, the patch did
+nothing.</strong> <strong>This is the natural successor to the <code>DATA_BASE_ALLPROC</code> gate: that gate stops plan A's
+post-exploit in Lua; a changed qa_flags layout would stop plan B's jailbreak at the native layer, each with
+its own named error.</strong></p>
 <p><strong>That control channel was checked on both ends, because a length encoding that does not match byte for
 byte is a silent failure: the connection succeeds and the execution is wrong.</strong> The sender at
 <code>send_lua.py:56</code>:</p>
