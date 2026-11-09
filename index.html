@@ -2057,6 +2057,18 @@ tempo reale = 3.006896s
 <p><strong>The blocked-thread test is therefore one non-lethal run: a sync XHR to <code>/log?delay=5</code> with a
 timestamp before and after.</strong> Whether the server holds the delay is already known without the device;
 only whether the client stops inside it needs the console.</p>
+<p><strong>The probe for it is written, registered, in the live plan, and its logic is tested on both branches
+of the decision.</strong> It measures twice, because a delta with no comparison term proves nothing: first a
+sync XHR with no delay, then one with <code>?delay=4</code>, with the threshold at 70% of the requested delay.</p>
+<pre><code>=== ramo delay ONORATO ===
+ thread_blocked: true  | delayed_ms: 4000 | baseline_ms: 0
+=== ramo delay NON onorato ===
+ thread_blocked: false | delayed_ms: 0
+</code></pre>
+<p><strong>The negative branch matters as much as the positive.</strong> If the delay does not transfer into the
+client's elapsed time, the mechanism does not apply, and the probe says so rather than returning an
+ambiguous number. Library goes from 167 to 168 entries and the served plan from <code>plan_id</code> 2639 to
+2640 with three tiers.</p>
 <p><strong>Two limits stated plainly.</strong> It does not resolve the addrof, which is still the bottleneck, since
 the buffer must be located and the target pointer must be known. And the write lands in the
 WebProcess address space, not kernel memory, so it is a userspace write-what-where with
