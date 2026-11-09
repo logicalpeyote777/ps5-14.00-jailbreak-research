@@ -4940,6 +4940,19 @@ value read is the same vnode written to both fields, so the game points its root
 root.</strong> <strong>If <code>find_proc_by_pid(0)</code> fails or the offset is wrong, the escape writes the wrong vnode, and
 the <code>in_sandbox_before</code>/<code>in_sandbox_after</code> self-check of <code>escalate_curproc</code> detects it: <code>in_sandbox_after</code>
 staying at 1 means the escape did not take.</strong></p>
+<p><strong><code>find_proc_by_pid</code> is the sibling of <code>find_proc_by_name</code>, and the two together are the whole set of
+process-location helpers.</strong> <strong><code>find_proc_by_pid</code> (<code>kernel.lua:384</code>) checks the kernel read/write, asserts
+<code>allproc</code> is set, asserts the argument is a number, then walks the process list from the <code>allproc</code> head via
+<code>le_next</code> (<code>proc + 0x0</code>), reading each process's PID as a DWORD at <code>proc + PROC_PID</code> and comparing it to
+the target.</strong> <strong>It returns the proc on a match and <code>nil</code> at the end of the list (<code>proc == 0</code>), the same
+bounded-walk shape as <code>find_proc_by_name</code>.</strong> <strong>The only difference is the field read: a null-terminated
+string at <code>PROC_COMM</code> for the name, a DWORD at <code>PROC_PID</code> for the PID.</strong> <strong><code>find_proc_by_name</code> serves the
+sysent swap by finding <code>SceGameLiveStreaming</code> by name; <code>find_proc_by_pid</code> serves <code>get_root_vnode</code> by
+finding PID 0 by number.</strong> <strong><code>PROC_PID</code> is present on 14.00 because it is one of the static structure
+offsets written unconditionally in phase 2 of <code>get_ps5_kernel_offset</code> (<code>PROC_PID = 0xbc</code>), which runs
+after the firmware-table loop regardless of whether the table matched.</strong> <strong>Neither helper asks the firmware
+table for the name or the PID value; the table supplies only the field offset, and the value is read at
+runtime from the process structure.</strong></p>
 <p>Plan B's single table field is overwritten at runtime before use:</p>
 <pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
 kernel.addr.allproc = find_allproc()          -- runtime, no table
