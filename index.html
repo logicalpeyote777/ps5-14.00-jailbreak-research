@@ -3857,6 +3857,15 @@ by the gate survivors: <code>curproc+p_comm</code> (<code>:186</code>), <code>cu
 (<code>:202</code>) and <code>curproc_ofiles+0x100</code> (<code>:203</code>), all derived from the <code>curproc</code> group set in
 <code>make_kernel_arw</code> with static offsets.</strong> <strong>The nil-check is what turns the missing <code>data_base</code> from a
 false negative into a non-event.</strong></p>
+<p><strong>The runner tries both plans and stops at the first pass.</strong> <strong>The default is <code>--plan both</code>
+(<code>auto_test_1400.py:158</code>), which iterates plan A (lapse) then plan B (p2jb_handoff), and the first
+<code>attempt</code> that returns a pass prints the goal and returns 0.</strong> <strong>Trying A first is the right order
+because A establishes the kernel read/write at <code>:2032</code>, before the <code>DATA_BASE_ALLPROC</code> gate at <code>:2039</code>,
+so A reaches the goal even when its post-exploit bails at the gate.</strong> <strong>If A dies before establishing the
+primitive, because the double-free does not complete on 14.00, the fallback B tries its own route through
+the handoff.</strong> <strong>The first pass of either plan is the goal, and the supervisor stops on that return code
+rather than restarting, so a real result is not lost to a retry loop: the supervisor restarts only on the
+no-foothold code, never on a tested pass or a tested failure.</strong></p>
 <p><strong>The read proof and the write proof are deliberately separated by risk.</strong> <strong>The read proof is zero-risk:
 <code>inside_kdata</code> (<code>:112-117</code>) is <code>evf.cv.cv_description</code>, the constant string <code>"evf cv"</code>, and reading it
 back proves arbitrary read without writing anything.</strong> <strong>The write proof is the canary round trip, and its
