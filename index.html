@@ -3498,6 +3498,18 @@ functional difference is the flag. The package is at
 sha256 <code>3b1115e31b443c4111ab1639adda54d38cbd778d11b3bd8857bf689e8dc3fab4</code>, and <code>savedata.bin</code>
 carrying the same SBL key block as the other packages (<code>4f954291…</code>), so the zero-key unseal path is
 unchanged.</p>
+<p><strong>The tree comparison checks names, not bytes, so both images were unpacked and compared file by file
+to close the point properly.</strong> <code>diff -rq</code> over the two unpacked trees, 29 files each, reports exactly
+one difference: <code>pad.dat</code>. And that difference is truncation rather than new content. The primary's
+first 102646336 bytes and the writable variant's entire padding hash to the same value,
+<code>5e4386c36bac3fee8fd615a49fe7a8ecf2f20928c8269fa2e3cfad73e5ddbee0</code>, so no byte of the padding was
+regenerated. The seven files that carry the exploit were checked individually with <code>cmp</code> and are
+identical: <code>inject.iet</code>, <code>main.lua</code>, <code>kernel.lua</code>, <code>kernel_offset.lua</code>, <code>elfldr.elf</code>,
+<code>ps5-kexp.bin</code>, <code>sce_sys/param.sfo</code>. <strong>The writable variant is therefore the primary V-pad with
+exactly two differences, the header <code>readonly</code> byte cleared and the padding truncated by 491520 bytes
+to land on 3200 blocks.</strong> No loader file was touched, which makes the pair a clean A/B: if the
+primary runs and the writable variant does not, the flag is the only remaining variable, and the
+converse holds too.</p>
 <p><strong>One comparison that must not be drawn.</strong> Attempting to compare inode write bits between the two
 saves leads to a false conclusion. The gezine original's inode modes and flags come out at high
 entropy (<code>0xE457</code>, <code>0x2EFC</code>, <code>0x9921DC3E</code>), which is encrypted data read with the wrong key: the
