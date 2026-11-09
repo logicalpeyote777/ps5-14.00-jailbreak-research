@@ -626,6 +626,18 @@ retained with no pointers extracted, which invites generalising the SSV diagnosi
 </tr>
 </tbody>
 </table>
+<p><strong>With the SSV corrected to an object payload, the convergence becomes three vectors, not two.</strong> The
+<code>history.state</code> vector was checked and also carries objects with preserved sharing, and the
+<code>ntfusion-iterator-confusion</code> probe was checked and reports <code>numeric_spray=False</code>, <code>obj_spray=True</code>:
+its payload is already an object, so its zero-pointers is the same read-primitive gap, not the numeric
+flaw. <strong>Three independent vectors, with different mechanisms (structured clone, history serialization,
+iterator confusion), converge on the same condition: the payload has the right shape (objects with
+sharing), but the byte-addressable read of the slot is missing.</strong></p>
+<p><strong>This closes the question of which vector to choose. The vector is not the bottleneck; all three have
+the right shape. The bottleneck is the byte-addressable read via UAF, common to all three.</strong> Investing
+in a fourth vector would be useless: it would have the same right shape and the same missing stretch.
+<strong>The work that counts is one piece: the read. Once a byte-addressable read on the butterfly exists, any
+of the three vectors feeds it. Until then, three vectors equally ready and equally blocked.</strong></p>
 <p><strong>The probe says so in its own comment: a TypeError is the PASS for reachability, and "whether it is
 exploitable is a separate question; we only report reachability, never infer exploitability from a
 throw."</strong> Applying the SSV correction here would have meant changing a payload that was already right,
