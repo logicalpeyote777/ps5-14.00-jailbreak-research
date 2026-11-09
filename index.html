@@ -4058,6 +4058,19 @@ it leaves the primitive functioning and raises an exception.</strong> If the exc
 init aborts, but the primitive underneath remains valid. <strong>That distinction matters for reading a
 test result: a discovery failure and a primitive failure are different events, and this ordering is
 what separates them.</strong></p>
+<p><strong>The read side is a hierarchy of wrappers over one base primitive.</strong> <strong><code>read_byte</code>, <code>read_word</code>,
+<code>read_dword</code> and <code>read_qword</code> (<code>kernel.lua:14-31</code>) are each a <code>read_buffer</code> call with a fixed size of 1,
+2, 4 or 8 bytes.</strong> <strong><code>read_buffer</code> is the base, the copyout of the ipv6 primitive.</strong> <strong>On top of that
+sits <code>read_null_terminated_string</code> (<code>:39</code>), the only read that takes a variable length, because its
+length is set by the null terminator rather than by a parameter: it reads 8-byte chunks with
+<code>read_buffer(kaddr, 0x8)</code>, searches each chunk with <code>chunk:find("\0")</code>, and returns everything before the
+null, accumulating the chunks into the result until the terminator appears.</strong> <strong>This is the primitive that
+turns the raw kernel read into a named string read, and it is what <code>find_proc_by_name</code> uses to read a
+process's <code>p_comm</code>.</strong> <strong>Every read primitive in the chain depends on <code>read_buffer</code>, which is the copyout
+of the ipv6 primitive, so the whole read hierarchy stands or falls with the same primitive the goal
+depends on.</strong> <strong>One small imperfection was noted: the <code>if string.byte(result[1]) == 0 then return nil end</code>
+after the <code>while true</code> loop is unreachable, since the loop always returns from inside when it finds the
+null; the leftover is harmless and does not change behavior.</strong></p>
 <p><strong>Confidence on 14.00, separated by component rather than given as one number.</strong></p>
 <table>
 <thead>
