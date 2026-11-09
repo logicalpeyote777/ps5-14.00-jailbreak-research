@@ -4905,6 +4905,20 @@ primitive.</strong> <strong>None comes from the firmware table.</strong> <strong
 <code>find_proc_offsets</code> finds where the name lives inside each proc, <code>find_proc_by_name</code> walks the list
 reading names until it finds <code>SceGameLiveStreaming</code>, and the swap borrows that process's PS5 table.</strong>
 <strong>Three runtime discoveries, one swap, and the kexp gets the syscall table it needs.</strong></p>
+<p><strong>A stability measure sits around the exploit rather than inside it.</strong> <strong><code>pin_to_core</code>
+(<code>p2jb_handoff.lua:150</code>) builds a CPU affinity mask with <code>bit32.lshift(1, core)</code> and calls
+<code>syscall.cpuset_setaffinity(level=3, which=1, id=-1, setsize=0x10, mask)</code>, which binds the calling
+thread to the chosen core.</strong> <strong>Before the exploit runs, <code>get_current_core()</code> saves the thread's present
+core into <code>ORIG_MAIN_CORE</code> (<code>:201</code>) and the thread is pinned to the exploit's chosen core (<code>:202</code>);
+after the exploit, <code>pin_to_core(ORIG_MAIN_CORE)</code> puts it back (<code>:1266</code>).</strong> <strong>The reason is timing: the
+double-free and the grooming are sensitive to cache state, and a thread that migrates between cores
+mid-exploit runs with a cold cache and shifted timings, which is exactly the kind of nondeterminism that
+makes a heap exploit miss.</strong> <strong>Pinning keeps the cache warm and the timings stable for the duration, and
+the restore afterward returns the thread to normal scheduling.</strong> <strong>This is the same save-and-restore
+shape used for the sysent swap and for the error path: change a thread property temporarily, put it back
+when done.</strong> <strong>It adds no firmware-table dependency, since <code>cpuset_setaffinity</code> (<code>0x1E8</code>) is a standard
+scheduling syscall resolved by the loader, and if it failed the exploit could still run because pinning
+is a stability optimization rather than a functional prerequisite.</strong></p>
 <p>The two <code>find_allproc</code> implementations make the difference concrete. Plan A uses the table field as a
 validity check on the mask match (<code>lapse.lua:1807-1823</code>):</p>
 <pre><code class="language-lua">if bit64.band(proc, KDATA_MASK) == KDATA_MASK then
