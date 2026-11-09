@@ -3632,6 +3632,23 @@ than no check.</strong> <strong>Read is proven by walking the <code>allproc</cod
 them is not a self-inflicted echo. <strong>Write is proven by a full round-trip against <code>DATA_CAVE</code>, the
 kernel data scratch area: write, read back, restore.</strong> <strong>A flag reporting that read/write is
 available, without the round-trip, is not proof.</strong></p>
+<p><strong>A PASS also needs to be attributable to the run that produced it, so the runner now fires a
+read-only fingerprint before any exploit.</strong> Without it, a <code>TEST2 PASS</code> says the primitive works but
+not which Lua was on the other end of port 9026, which pid performed the measurement, or whether the
+primitive had already been initialised by an earlier attempt. In that last case the baseline is dirty
+and the PASS cannot be credited to the current run. <code>fingerprint.lua</code> answers all three before
+anything fires, with every field inside its own <code>pcall</code> so a missing field cannot take down the rest:</p>
+<pre><code class="language-lua">print(&quot;lua_version = &quot; .. safe(function() return _VERSION end))
+print(&quot;pid = &quot; .. safe(function() return syscall.getpid() end))
+print(&quot;kernel_rw_initialized = &quot; .. safe(function()
+    local k = require(&quot;kernel&quot;); return tostring(k.rw_initialized) end))
+</code></pre>
+<p><strong><code>kernel_rw_initialized</code> must read false at step 0, because step 0 runs before every exploit.</strong> If it
+reads true, something already fired and the baseline is not clean, which is precisely the case the
+fingerprint exists to catch. A failure of step 0 does not block the plans: it is diagnostics, not a
+prerequisite, and stopping a five-minute test window over a missing print would be a self-inflicted
+loss. The round trip was verified against a listener: 2100 bytes of Lua sent, 112 bytes of fingerprint
+returned, and the collected branch taken.</p>
 <p><strong>What this changes about the shape of the work.</strong> The browser chain remains documented as the
 secondary path, with everything measured about it intact. <strong>The primary route is now one where the
 foothold is engine behaviour rather than an engine vulnerability, where the save is built on a PC
