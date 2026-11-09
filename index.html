@@ -4581,6 +4581,16 @@ DATA_BASE_ALLPROC: 13 voci (13 gruppi di FW che condividono lo stesso offset)
 </code></pre>
 <p>Coverage runs 1.00 through 12.02. There is no 13.xx and no 14.xx entry anywhere in the file. On
 14.00 <code>kernel_offset.DATA_BASE_ALLPROC</code> is <code>nil</code>, so the gate fires on every run.</p>
+<p><strong>The string that decides the gate is the same string the loader prints in its notification, which makes
+the on-screen notification a predictor of the gate.</strong> <strong><code>get_version</code> (<code>misc.lua:195-207</code>) reads
+<code>kern.sdk_version</code> and formats it <code>'%x.%02x'</code> over two little-endian bytes, and the SDK version is
+encoded so its hex digits spell the version: <code>0x1202</code> becomes <code>"12.02"</code>, <code>0x1400</code> becomes <code>"14.00"</code>.</strong>
+<strong>That dotted string is exactly the form the table keys use, and the gate's comparison
+(<code>ko.lua:339</code> <code>if check_fw == FW_VERSION</code>) runs on it.</strong> <strong>So when the notification shows <code>14.00</code>, the
+same <code>14.00</code> is what fails to match any table key and leaves <code>DATA_BASE_ALLPROC</code> nil.</strong> <strong>There is no
+risk of the visible evidence and the code decision disagreeing: they read the same <code>FW_VERSION</code>.</strong> <strong>For
+14.00 the chain is: notification <code>14.00</code> → gate active → post-exploit bails → but the ipv6 primitive
+with its static offsets survives, and the goal is still reached through the canary round trip.</strong></p>
 <p><strong>The gate stops the jailbreak. It does not stop the primitive, because of what the <code>return</code> is
 scoped to.</strong> It exits <code>post_exploitation_ps5</code>, not <code>kexploit</code>. The real ordering is:</p>
 <pre><code class="language-lua">-- lapse.lua:2025-2046
