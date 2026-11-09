@@ -4885,6 +4885,13 @@ address range rather than a per-firmware offset, which is why no table entry is 
     proc = kernel.read_qword(proc + 0x8)
 end
 </code></pre>
+<p><strong>The concrete mechanism behind the mask is worth stating.</strong> <strong><code>KDATA_MASK</code> is <code>0xFFFFFFFF00000000</code>
+(<code>:1089</code>), and kernel-data addresses on PS5 carry all 32 high bits set (<code>0xFFFFFFFFxxxxxxxx</code>) while
+userland addresses do not.</strong> <strong>ANDing an address with the mask and comparing to the mask is a test for
+"this address lives in kernel data".</strong> <strong>Walking <code>proc-&gt;p_list-&gt;le_prev</code> from <code>curproc</code> until the address
+passes that test lands on the <code>allproc</code> anchor, which lives in kernel data.</strong> <strong>The test works on any
+firmware because the high-bits-set pattern is a platform constant, not a per-firmware value: it does not
+need the table because it is not asking the table anything.</strong></p>
 <p><code>find_proc_offsets</code>, defined in the loader at <code>koffset.lua:480</code>, is likewise pure pattern discovery.
 It reads 0x1000 bytes from <code>curproc</code> and recovers both offsets from known byte signatures,
 <code>"ce fa ef be cc bb"</code> for <code>p_comm</code> and <code>"ff ff ff ff ff ff ff 7f"</code> for <code>p_sysent</code>, with no
