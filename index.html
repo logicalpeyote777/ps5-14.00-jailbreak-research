@@ -2262,6 +2262,16 @@ write-what-where with server-controlled content, the sync XHR bypasses all four.
 <code>addrof</code>, needed regardless to know where to point, and <code>pop_rsp</code> only if execution is also wanted.
 <strong>That separates two objectives that had been pasted together: "can I write" and "can I execute" are
 different blocks with different weights, and the sync XHR moves the first out from under the second.</strong></p>
+<p><strong>What the probe itself proves is narrower than the mechanism, and the difference matters when reading
+the result.</strong> The probe measures three things: a baseline sync XHR with no delay, a delayed one with
+<code>thread_blocked = elapsed &gt;= DELAY * 0.7 * 1000</code>, and <code>server_echo</code> from <code>x1.responseText</code>. <strong>That
+establishes the block and the arrival. It does not establish that the response buffer was located via
+UAF, that its pointer was redirected, or that the bytes landed at a target rather than in the buffer
+they were already destined for.</strong> <code>thread_blocked: true</code> means the block exists, not that the write
+works. <strong>It is a necessary-condition probe, not a sufficient-condition one: it confirms the premise,
+and the write is a further chain of steps the probe does not touch.</strong> The missing step is the same one
+that blocks every other route, a UAF view that locates the response buffer, which is the same missing
+<code>addrof</code>.</p>
 <p><strong>Two limits stated plainly.</strong> It does not resolve the addrof, which is still the bottleneck, since
 the buffer must be located and the target pointer must be known. And the write lands in the
 WebProcess address space, not kernel memory, so it is a userspace write-what-where with
