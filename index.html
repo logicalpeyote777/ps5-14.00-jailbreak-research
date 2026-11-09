@@ -3291,6 +3291,50 @@ vulnerability disclosed more than two years ago is still live.</strong></p>
 <p><strong>The offset analysis was not wrong; it was answering a narrower question.</strong> The offsets are
 ~85-90% because they were never per-firmware. <strong>Test 2 as a whole is ~25-40% because upstream of
 those offsets sits an exploit whose declared window stops at 10.01.</strong></p>
+<p><strong>The goal does not depend on a single route, and that is where the value of having two plans
+sits.</strong> The chain is a robust foothold, around 95%, multiplied by the disjunction of two plans.
+<strong>The two plans run on different vulnerabilities: plan A is the LAPSE AIO double-free from 2023,
+plan B is the <code>ps5-kexp.bin</code> IOMMU softc path.</strong> <strong>Different vulnerabilities are patched on
+different cycles, so the two failures are not perfectly correlated.</strong></p>
+<p><strong>Working the arithmetic out rather than asserting a number.</strong> Taking the foothold at 0.95 and the
+two routes at 25-40% and 30-45%:</p>
+<table>
+<thead>
+<tr>
+<th>Correlation assumption</th>
+<th>P(at least one route)</th>
+<th>With foothold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Routes independent</td>
+<td>47.5% to 67.0%</td>
+<td><strong>45.1% to 63.6%</strong></td>
+</tr>
+<tr>
+<td>Routes perfectly correlated (only the better route counts)</td>
+<td>30% to 45%</td>
+<td><strong>28.5% to 42.7%</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>A combined figure of roughly 50-55% sits in the near-independent part of that bracket.</strong> <strong>The
+honest reading is that the estimate is only as good as the independence assumption, and the
+correlation is not zero: both routes depend on the same reachable kernel behind the same foothold,
+and a kernel reshuffle large enough to break one could plausibly break both.</strong> <strong>The direction is
+clear even if the point estimate is soft: two routes on unrelated vulnerabilities beat one route,
+and the gap between the two rows of the table is the size of that claim.</strong></p>
+<p><strong>One caveat on the input figures.</strong> The 95% foothold figure is an assumption carried into the
+calculation rather than a measured quantity. <strong>What is established about the foothold is
+qualitative: arbitrary Lua execution is proven and carries no firmware offset, so it does not age
+with the release.</strong> <strong>No measurement in this note produces a probability for it.</strong> The combined
+figure should be read as conditional on that assumption holding.</p>
+<p><strong>The result is the structure rather than a single number.</strong> A foothold that does not age with the
+firmware, a read/write primitive whose offsets are hardcoded platform-wide, and two independent
+vulnerabilities as ways of switching it on. <strong>Whatever the device test returns, that structure is
+the research result: it is what makes the remaining unknown small enough to name, and it is why a
+failure on one route is a redirect rather than a dead end.</strong></p>
 <p><strong>The sequence that actually runs Test 2 is therefore not a save boot.</strong> <code>lapse.lua</code> is not in the
 save and has to be pushed over the network:</p>
 <pre><code>foothold (Test 1) -&gt; port 9026 open

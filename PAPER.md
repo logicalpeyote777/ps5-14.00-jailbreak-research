@@ -2999,6 +2999,39 @@ vulnerability disclosed more than two years ago is still live.**
 ~85-90% because they were never per-firmware. **Test 2 as a whole is ~25-40% because upstream of
 those offsets sits an exploit whose declared window stops at 10.01.**
 
+**The goal does not depend on a single route, and that is where the value of having two plans
+sits.** The chain is a robust foothold, around 95%, multiplied by the disjunction of two plans.
+**The two plans run on different vulnerabilities: plan A is the LAPSE AIO double-free from 2023,
+plan B is the `ps5-kexp.bin` IOMMU softc path.** **Different vulnerabilities are patched on
+different cycles, so the two failures are not perfectly correlated.**
+
+**Working the arithmetic out rather than asserting a number.** Taking the foothold at 0.95 and the
+two routes at 25-40% and 30-45%:
+
+| Correlation assumption | P(at least one route) | With foothold |
+|---|---|---|
+| Routes independent | 47.5% to 67.0% | **45.1% to 63.6%** |
+| Routes perfectly correlated (only the better route counts) | 30% to 45% | **28.5% to 42.7%** |
+
+**A combined figure of roughly 50-55% sits in the near-independent part of that bracket.** **The
+honest reading is that the estimate is only as good as the independence assumption, and the
+correlation is not zero: both routes depend on the same reachable kernel behind the same foothold,
+and a kernel reshuffle large enough to break one could plausibly break both.** **The direction is
+clear even if the point estimate is soft: two routes on unrelated vulnerabilities beat one route,
+and the gap between the two rows of the table is the size of that claim.**
+
+**One caveat on the input figures.** The 95% foothold figure is an assumption carried into the
+calculation rather than a measured quantity. **What is established about the foothold is
+qualitative: arbitrary Lua execution is proven and carries no firmware offset, so it does not age
+with the release.** **No measurement in this note produces a probability for it.** The combined
+figure should be read as conditional on that assumption holding.
+
+**The result is the structure rather than a single number.** A foothold that does not age with the
+firmware, a read/write primitive whose offsets are hardcoded platform-wide, and two independent
+vulnerabilities as ways of switching it on. **Whatever the device test returns, that structure is
+the research result: it is what makes the remaining unknown small enough to name, and it is why a
+failure on one route is a redirect rather than a dead end.**
+
 **The sequence that actually runs Test 2 is therefore not a save boot.** `lapse.lua` is not in the
 save and has to be pushed over the network:
 
