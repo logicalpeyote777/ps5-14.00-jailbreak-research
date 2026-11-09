@@ -2403,6 +2403,20 @@ from the console; the channel that delivers it to the module is. And the paradox
 that computing <code>base + offset</code> needs the gadget's offset inside WebKit, which comes from the
 <code>wk_gadgetmap</code>, whose byte scan is killed by execute-only text. <strong>A provider solves how to deliver it,
 not how to find it.</strong> The wall stays where it was, one level over.</p>
+<p><strong>The Artemis route does not have this gap, because the loader carries its own gadget provider.</strong> <strong>The
+loader invokes native syscalls by building ROP chains: <code>fcall</code> (<code>ropchain.lua:585-659</code>) wraps a target
+address and <code>fcall:__call(rdi, rsi, rdx, rcx, r8, r9)</code> (<code>:642</code>) runs the chain to land in the syscall
+stub.</strong> <strong><code>syscall.resolve</code> (<code>syscall.lua:67</code>) turns each <code>(name, number)</code> pair into
+<code>syscall[name] = fcall(syscall_address, num)</code>, and on PS5 <code>syscall_address</code> is <code>gettimeofday + 7</code>
+(<code>syscall.lua:28</code>), a generic syscall entry made by skipping the seven-byte <code>mov rax, &lt;num&gt;</code>.</strong> <strong>The
+loader validates the whole mechanism at startup with a safe call: <code>do_sanity_check</code> (<code>syscall.lua:83</code>)
+resolves <code>getpid</code>, calls it, and checks the result looks like a real PID (<code>pid.h == 0 and pid.l ~= 0</code>)
+before anything destructive runs.</strong> <strong>This is a different ROP from the browser path's.</strong> <strong>The browser
+ROP needs <code>pop_rsp</code>, <code>thread_list</code> and <code>worker_wait_return</code>, the four blocked prerequisites; the loader's
+ROP needs none of them, because <code>fcall</code> builds the chain to the stub directly and the loader ships the
+gadget provider itself.</strong> <strong>That is one more structural reason the Artemis route is primary and the
+browser route secondary: the first carries its gadget provider, the second waits for one that was never
+built.</strong></p>
 <p><strong>The EXPECT table does not reach 14.00.</strong> <code>tools_lkfind.js</code> carries <code>pop_rsp: 0x343AA</code> for
 10.00 and <code>null</code> for 12.00/12.40, with aliases only across 12.02/12.20/12.60/12.70.
 <code>grep -cE '"1[34]\.'</code> over the table returns <strong>0</strong>: no 13.x entry and no 14.x entry exists,
