@@ -3947,6 +3947,31 @@ both lists: the PS5 list tops out at 10.01 and the PS4 list at 12.02, with no 13
 entry in either, and the kernel patches bundled with the loader are PS4-only.</strong> What the analysis
 shows is that this absence does not reach the read/write path, because that path was never
 per-firmware.</p>
+<p><strong>The two-phase structure of <code>get_ps5_kernel_offset</code> (<code>ko.lua:333-381</code>) makes the mechanism concrete.</strong>
+<strong>Phase one is the firmware-table loop (<code>:337-347</code>): it walks <code>ps5_kernel_offset_list</code> and, if
+<code>FW_VERSION</code> matches a key, assigns <code>kernel_offset = offsets</code> and adds the <code>DATA_BASE_TARGET_ID</code>,
+<code>QA_FLAGS</code> and <code>UTOKEN_FLAGS</code>.</strong> <strong>On 14.00 there is no <code>14.00</code> key, the loop does not match, and
+<code>kernel_offset</code> arrives at phase two as the empty table <code>{}</code>.</strong> <strong>Phase two then writes the static
+structure offsets unconditionally, after the loop: <code>PROC_FD=0x48</code>, <code>PROC_PID=0xbc</code>,
+<code>PROC_VM_SPACE=0x200</code>, <code>FILEDESC_OFILES=0x8</code>, <code>SIZEOF_OFILES=0x30</code>, <code>PMAP_CR3=0x28</code>, <code>SO_PCB=0x18</code>,
+<code>INPCB_PKTOPTS=0x120</code>.</strong> <strong>Because phase two runs last and unconditionally, the structural offsets are
+present on 14.00 even though the firmware table never matched.</strong> <strong>The ipv6 primitive finds
+<code>SO_PCB=0x18</code> and <code>INPCB_PKTOPTS=0x120</code> exactly where it needs them.</strong></p>
+<p><strong>This is why the <code>DATA_BASE_ALLPROC</code> gate does not reach the primitive.</strong> <strong>The gate fires because
+<code>DATA_BASE_ALLPROC</code> comes only from the firmware table (phase one), and on 14.00 that table does not
+match, so the field is nil.</strong> <strong>But the ipv6 read/write path consumes the static offsets (phase two),
+not the <code>DATA_BASE_*</code> fields, and those are set regardless.</strong> <strong>The gate blocks the post-exploit step that
+publishes <code>data_base</code> and <code>allproc</code>; it does not block the primitive that points <code>ip6_pktopts</code> and does
+the out-of-band read and write.</strong> <strong><code>lapse.lua</code> references exactly those six static offsets at the points
+the primitive needs them: <code>:1518</code> <code>curproc + PROC_PID</code>, <code>:1528</code> <code>curproc + PROC_FD</code>, <code>:1529</code>
+<code>curproc_fd + FILEDESC_OFILES</code>, <code>:1533</code> <code>curproc_ofiles + sock * SIZEOF_OFILES</code>, <code>:1540</code>
+<code>fd_data + SO_PCB</code>, <code>:1541</code> <code>pcb + INPCB_PKTOPTS</code>.</strong> <strong>All six are present in the PS5 branch of phase
+two.</strong></p>
+<p><strong>The platform dispatch keeps the two families clean.</strong> <strong><code>get_kernel_offset</code> (<code>:421</code>) routes <code>ps4</code> to
+<code>get_ps4_kernel_offset</code> and <code>ps5</code> to <code>get_ps5_kernel_offset</code> by <code>PLATFORM</code>, not by firmware.</strong> <strong>The
+PS4 branch carries different values (<code>PROC_PID=0xb0</code>, <code>FILEDESC_OFILES=0x0</code>, <code>SIZEOF_OFILES=0x8</code>,
+<code>INPCB_PKTOPTS=0x118</code>); on PS5 14.00 the PS5 branch with its own offsets is taken, with no cross-family
+confusion.</strong></p>
 <p><strong>The primitive also never touches page-table walking.</strong> <code>copyout</code> and <code>copyin</code> are built as
 pipe-plus-pipemap tricks on top of <code>ipv6_kwrite</code>, with no page walk, no <code>PMAP_STORE_*</code> and no
 <code>DATA_BASE_*</code> in the path. <strong>The only consumer of <code>DATA_BASE_*</code> outside the table is <code>gpu.lua</code>,
