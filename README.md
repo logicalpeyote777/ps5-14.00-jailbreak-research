@@ -103,6 +103,14 @@ failure.**
 
 **The browser path ends at a missing leak. The save path ends at a device check.**
 
+**The save path is also orthogonal to the bug that stopped the community's own 14.00 candidate.** **Prolapse,
+the most prominent jailbreak aimed at this firmware range, targeted `aio_multi_delete` and was declared
+ineffective on 14.00 and 14.10 by its own author after testing.** **That is the same class of bug the
+browser path needs and does not have: a kernel memory-safety bug yielding read/write.** **The save path does
+not touch the AIO path at all. Its foothold is a bug in the Visual Novel engine, its kernel read/write is an
+out-of-band socket option, and its jailbreak is a QA-flag patch. None of these is the AIO use-after-free that
+killed Prolapse. Where Prolapse fell, the save path does not pass.**
+
 ---
 
 ## Kernel-side: the 14.00 artifact is in hand, the kernel image is not
