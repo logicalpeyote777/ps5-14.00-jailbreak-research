@@ -1876,6 +1876,31 @@ question is the same one the SSV channel left, whether the serialization yields 
 view rather than a copy of values. The run costs one browser session and is not lethal, since
 <code>replaceState</code> does not UAF anything, so unlike the lethal cycles it does not require reopening the
 page.</p>
+<p><strong>Why the spray landed on floats has a cause, and it is fixable rather than fatal.</strong> Reading the spray
+payload in <code>ssv-addrof-1400</code>:</p>
+<pre><code class="language-js">for (var q = 0; q &lt; 64; q++) {
+  var holder = { idx: q, ref: { deep: q * 8 } };
+  clones.push(structuredClone(holder));
+}
+</code></pre>
+<p><strong><code>idx: q</code> is a number and <code>ref.deep: q * 8</code> is a number.</strong> An object whose properties are all
+numeric gets a butterfly with <code>Double</code> inline storage in WebKit; the slot holds the IEEE-754 bit
+pattern of the value, not a pointer. Converting the probe's own constants settles it:</p>
+<pre><code>99.101112    -&gt; 0x4058c6789e774eec
+99.202213    -&gt; 0x4058ccf10ecb74de
+98.8         -&gt; 0x4058b33333333333
+96.0         -&gt; 0x4058000000000000
+</code></pre>
+<p><strong>Every value in that range starts with <code>0x4058</code>.</strong> The observation is the bit pattern of the sprayed
+floats, not an address that happens to begin the same way. <strong>And that carries a consequence worth
+stating: the read primitive works.</strong> It reads the right memory and returns it faithfully. <strong>The
+problem was not the read, it was that numbers were put where pointers were needed.</strong></p>
+<p><strong>The fix is to spray object references.</strong> With a property pointing at an object, the butterfly is
+<code>Object</code> and the slot holds the referenced object's address, and sharing one <code>marker</code> across two
+properties gives a built-in check: the same value read at two slots means pointers, since a float
+repeating identically is possible while a pointer repeating is by construction.</p>
+<p><strong>The SSV failure had been read as "this vector does not produce pointers." The causal chain is more
+mundane and more repairable: numbers were placed where objects belonged.</strong></p>
 <p><strong>The probe is registered in the harness rather than left as a standalone file.</strong> <code>pg_tests.json</code>
 goes from 166 to 167 entries under the id <code>CVE-2026-43720-history-addrof</code>, following the pattern
 of the existing custom entries. The <code>post</code> contract is where this is easy to get wrong. The real one,
