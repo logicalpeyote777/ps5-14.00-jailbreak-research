@@ -3746,6 +3746,20 @@ writable alias; <code>mmap(..., PROT_RWX, ...)</code> at <code>:119</code> gives
 <code>dlsym(0x2001, "getpid")</code> at <code>:184</code> resolves symbols inside the running process. <strong>The control
 channel is TCP: the loader opens a listening socket and Lua is pushed to it from a workstation, so
 once the loader runs the console is commanded over the network rather than through the console.</strong></p>
+<p><strong>The native execution of the kexp was read in full at <code>spawn_payload</code> (<code>p2jb_handoff.lua:1191</code>).</strong> <strong>It
+resolves <code>scePthreadCreate</code> and <code>scePthreadJoin</code> through <code>dlsym</code>, reads <code>ps5-elfldr.elf</code> and
+<code>ps5-kexp.bin</code> from <code>/data/</code> or the save's <code>savedata0/</code> path (a named error if either is missing),
+loads the kexp into executable memory with <code>jitshm_create</code> plus <code>mmap</code> under <code>PROT_RWX</code>, copies the kexp
+bytes in with <code>memcpy</code>, and starts it on a fresh thread with <code>scePthreadCreate(entry_addr,
+payload_args)</code>.</strong> <strong>The 0x28-byte argument struct is the bridge between the Lua loader and the native
+kexp: four pipe file descriptors at <code>+0x00</code> through <code>+0x0C</code> carry the kernel read/write handoff back to
+the loader, <code>+0x10</code> carries the <code>allproc</code> anchor the kexp needs for the jailbreak, and <code>+0x18</code> and
+<code>+0x20</code> carry the elfldr pointer and size that the kexp uses to load the native payload.</strong> <strong>The
+executable permission comes from <code>jitshm_create</code> creating a JIT shared-memory object with RWX and <code>mmap</code>
+mapping it; without that mapping there is no executable memory for the kexp.</strong> <strong>The residual risk is
+whether <code>jitshm_create</code> or <code>scePthreadCreate</code> behave differently on 14.00; if the JIT mapping is not
+executable or the thread create fails, the kexp does not run and the failure is visible in the
+<code>pthread_create ret</code> line the payload prints.</strong></p>
 <p><strong>That control channel was checked on both ends, because a length encoding that does not match byte for
 byte is a silent failure: the connection succeeds and the execution is wrong.</strong> The sender at
 <code>send_lua.py:56</code>:</p>
