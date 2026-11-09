@@ -2713,6 +2713,21 @@ when it is not.</strong></p>
 <code>STABLE-DUAL-VIEW-OURS</code> and one with <code>error</code>.</strong> The first is the real outcome; the module emits
 twice. It does not invalidate the result but an automated report would show an error line beside a
 positive outcome.</p>
+<p><strong>The residual was traced and fixed, and the fix uncovered a second defect.</strong> The cause is the <code>post</code>
+thenable invoking <code>catch</code> on success with <code>null</code>, so the outer <code>.catch()</code> posts a second <code>pg_end</code> with
+<code>err: "null"</code> after a good one. Adding a null guard fixes it. <strong>But replacing the plan's copy with the
+library's copy is not neutral when the two diverge: the library held 5491 bytes and the plan 5761, the
+difference being an auto-normalisation shim that added the thenable return to <code>post</code>.</strong> The library's
+<code>post</code> ends with no return at all, so without the shim <code>post("pg_end", r).then(...)</code> throws
+<code>undefined is not object</code>. <strong>The fix for the double <code>pg_end</code> would have broken the module.</strong> Restoring
+the thenable in the library makes the two copies agree, <code>code_len</code> 6122, <code>plan_id</code> 2644, and the
+module runs clean in Chromium.</p>
+<p><strong>A third fact came out of the same check: the probe's <code>post</code> uses the relative URL <code>/log</code>, which does
+not resolve from <code>about:blank</code>.</strong> The module runs but its posts go nowhere when the host page is not on
+the probe origin. On the PS5 the page is served from the real origin so it works, but the probe
+depends on the URL of the page hosting it. <strong>A fix that breaks another thing is worse than not doing
+it, because the new symptom does not resemble the original problem: a double <code>pg_end</code> becomes
+<code>undefined is not an object</code> and the search goes somewhere else.</strong></p>
 <p><strong>What this excludes beforehand: if the agent fails to start on 14.00, the cause is not the loop
 logic, because the loop has been executed end to end in a real browser.</strong> What remains device-only is
 by definition what Chromium does not reproduce, the Capsicum worker <code>SecurityError</code> and the
