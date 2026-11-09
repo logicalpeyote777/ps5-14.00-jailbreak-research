@@ -1,158 +1,236 @@
-# Console runbook, PS5 14.00, first boot after the offline period
+# Console runbook for PS5 14.00
 
-Everything below is already armed. This is the order to do things in and what each
-answer means. Console time is the scarce resource; do not spend it on modules that
-waste it.
+Rewritten 2026-11-09 after verifying every countable fact. The previous version of this file was
+stale on all of them: it said the sweep was running (it is not), that the queue held 139 modules
+(the library holds 167 and the served plan holds 2), and that the current plan was `API-availability`
+at plan 570. **A runbook is read at the moment the console appears, so a stale one is worse than
+none.**
 
-## 0. State as left
+**And the rewrite went stale within hours, on its own numbers.** Registering the blocked-thread probe
+bumped the served plan to `plan_id 2640` with 3 tests while this file still said 2639 with 2. **A
+hand-maintained count drifts the moment anything is registered.** Read the live values instead of
+trusting the table:
 
-| item | value |
+```
+curl -sk http://127.0.0.1:8000/plan | python3 -c "import json,sys; p=json.load(sys.stdin); \
+  print(p['plan_id'], p['poll_ms'], [(t['tier'], len(t['code'])) for t in p['tests']])"
+```
+
+**Run from the host, not the container.** The probe server listens on the host's loopback; from inside
+the container `127.0.0.1:8000` is the container's own and returns an empty body, which then fails
+JSON parsing with an error that says nothing about the real cause.
+
+## 0. State as verified, not as remembered
+
+**The consolidated pre-flight lives in `kernel-hunt/preflight-consolidated-1400.md`: thirteen things
+verified offline against six device-only unknowns, the order that maximises information per console
+minute, and what each output means. Read that before the console comes on.**
+
+| item | verified value |
 |---|---|
-| sweep | running, `python3 sweep.py`, pushes one module per plan |
-| queue | 139 modules, priority order below |
-| current plan | `API-availability` as plan 570 |
-| idle-park fix | applied, parked idle plan bumps `plan_id` each cycle so a live-but-idle page re-reports and the sweep un-parks |
-| DNS | `manuals.playstation.net` → `192.168.1.70` active; shell domain **not** applied |
-| shell-domain flip | staged: `/opt/AGENTS/Ares/tmp/dns_shell.sh apply\|revert\|status` |
+| Save-path runner | `auto_test_1400.py` under `supervise_test.sh`, waiting on TCP 9026 at 192.168.1.91/.92 |
+| Supervisor | restarts the runner only on rc=3 (no foothold). rc=143 from a kill restarts it too |
+| Probe server | `probe_server.py --port 8000`, alive, nginx vhost `manuals.playstation.net` proxies to it |
+| Landing page | now `agent.html` (5428 B, md5 `40acf1f2…`), the self-driving polling loop |
+| Live plan | `plan_id 2640`, `poll_ms 2500`, 3 tests: `byteview-stability` (5761 B), `history-addrof` (5285 B), `blocked-thread` (3391 B) |
+| Probe library | 167 entries in `pg_tests.json`. **The library is not the queue** |
+| Sweep | **NOT running.** `pgrep -f sweep.py` matching is the ssh command line self-match, not a real process |
+| DNS | `manuals.playstation.net` rewritten to this host by **AdGuard**, not by anything on the host. `getent` on the host resolves to Akamai and that is expected |
+| Save packages | 5 built, all at `ACCOUNT_ID_PLACEHOLDER`, verified intact |
 
-## 1. First action: let the head of queue run untouched
+**The primary route is the save path, not the browser.** The save path reaches kernel arbitrary r/w
+through `ipv6_kernel_rw`. The browser path is secondary and currently capped at userland.
 
-Do not change anything for the first ~10 minutes. The sweep pushes the priority
-modules in this order and each one answers a distinct question:
-
-| # | module | what a good answer looks like | what it decides |
-|---|---|---|---|
-| 0 | `API-availability` | which APIs exist on the 14.00 guide browser | whether the rest of the queue is even runnable |
-| 1 | `CVE-2026-43720-trigger` | `same=false` | **entry is live on 14.00** (vs the 14.10-only upstream confirmation) |
-| 2 | `43720-bitmap-trigger` | `REENTRY-DIFFERENT-CTX` | second door open; `patched-same-ctx` = closed |
-| 3 | `CVE-2026-43720-rw` | bidirectional | the R/W primitive itself |
-| 4 | `CVE-2026-43720-leak` | `integer-read-live` | DAZ-immune read works |
-| 5 | `FontFace-reclaim-leak` | `LEAK` + `heap_pointers` at `+0x58`/`+0x68` | **WebProcess ASLR defeated** |
-| 6 | `ntfusion-iterator-confusion` | `CONFUSED` with `control_clean=true` | iterator confusion reachable |
-| 7-12 | `K4-fdtype-{ctl,websocket,fetch,msgchan,worker,sse}` | which arm reports `corrupted` | **confirms or falsifies the tblB CVE-2026-45251 prediction** |
-
-The K4 arms are the single most valuable thing on the queue: one arm showing
-corruption on one fd class and not the others settles the static classification
-that is currently capped at "confidenza media".
-
-## 2. Budget warning, the K-modules are expensive
-
-| family | declared `timeout_ms` | observed |
-|---|---|---|
-| `K0-*` | 45 000 | `K0-canary-a` completed at 40 004 ms |
-| `K2-sock_abort-*` | 75 000 |, |
-| `K1-ws_churn-*`, `K3-worker_churn-*` | 135 000 | churn classes exceed 46 s |
-
-The 14 K-modules cost **20+ minutes of console time**. They are slow, not stuck.
-Do not interrupt them.
-
-## 3. Do NOT run these first, they waste console time
-
-Re-running the 17 modules that produced no verdict, with a 150 s hard timeout and a
-220 s virtual budget on patched Chromium:
-
-| result | count | meaning for the console |
-|---|---|---|
-| `NO_OUTPUT` | 10 | no verdict in 150 s even on a desktop engine, will burn WebProcess reloads on the PS5 |
-| ran, never finished | 4 | `pg_begin`/`pg_log`/`pg_report` but no `pg_end` |
-| resolved by the longer timeout | 3 | `aborted` (attempt 3), `unknown` (no crash), `patched` (`leaks: 0`) |
-
-The 10 `NO_OUTPUT` are `CVE-2022-22620`, `CVE-2025-43441`, `CVE-2026-20652`,
-`CVE-2026-20665`, `CVE-2026-28907`, `CVE-2026-28984-dom`, `CVE-2026-43660`,
-`CVE-2026-43670`, `CVE-2026-64781`, `CVE-2026-65332`, `CVE-2026-65340`.
-With `MAX_CRASHES = 2` each one can eat two passes before being skipped.
-**Run them last, or not at all.**
-
-## 4. Reading the results
-
-Compare every `pg_end` against the two negative baselines now on disk:
-
-- `probe/chromium_negative_baseline.json`, the 13 head-of-queue modules
-- `probe/chromium_core_driven_baseline.json`, all 112 core-driven modules
-
-**A module that reports the same outcome on patched Chromium as its headline
-"vulnerable" outcome is a false positive.** Across the 112 core-driven modules
-there were **zero** such cases, so the queue is clean in that specific sense.
-
-Read deaths as **confirmed live handlers**, not dead ends: a crash means the
-handler is present and ran deep enough to touch a bad pointer.
-
-## 5. If the guide browser cannot reach the kernel
-
-The browser path is a **userland** entry. WebKit UAF gives WebProcess **heap**
-r/w; the kernel stage needs an **arbitrary kernel write**. Different address
-spaces. Two open questions decide whether the handoff is even possible from here:
-
-1. Can the guide WebProcess make syscalls at all, and what is its Capsicum state?
-2. Can it reach routing sockets (Relapse's `rtmsg2` KASLR route)?
-
-If both are no, the browser entry must hand off to the game/loader path and the
-WebKit primitives become a userland-only result.
-
-## 6. The kernel stage: a characterized mechanism that is not yet an exploit
-
-**CORRECTION 2026-11-07.** The previous headline here read "The kernel stage has
-no mechanism" and declared the kind swap **abandoned** on the grounds that
-"nothing on the `sysctl(2)` operation path reads `oid_kind`". That was wrong,
-and it contradicted the finding this engagement is actually built on.
-
-**What was verified instead:** `oid_kind` *is* read on the operation path. The
-gates at `0xffffffff9e947ec2`, `0xffffffff9e947ed` and `0xffffffff9e947ed4`
-test it, and the swap `0x80048002 -> 0x70048002` leaves `CTLTYPE` (`& 0xf = 2`)
-untouched while flipping one `test`/`je` so the kernel skips `PRIV_SYSCTL_WRITE`.
-**The kind swap is a permission-check bypass, not a type confusion.** That
-characterization is our novel contribution: zero occurrences of `80048002`,
-`70048002`, `CTLFLAG`, `PRIV_SYSCTL`, `oid_kind` or `suser` across the eight
-main upstream documents.
-
-**What is still true, and is the actual headline:** a permission bypass is not a
-memory-safety violation. It changes who is allowed to write; it does not by
-itself produce an arbitrary kernel write. The `sysctl` write branch was measured
-and found bounded, the bound is on `len` (`req->+0x38 - req->+0x40`), there is
-no bound on `oid_arg1`, direction is user -> `oid_arg1` via `rep movsq`, with
-0 chaining and 0 amplification. **So the mechanism is characterized and the
-exploit is still missing. Those are two different gaps and solving one does not
-solve the other.**
-
-Cross-checked against the upstream landscape: **there is no public kernel exploit
-for 14.00 or 14.10 at all.** Relapse stops at 13.60. Upstream's own blocker is
-recorded as "no address of JS-owned memory", the same wall we are at.
-
-## 7. When leaving the console again
-
-Leave the sweep running. It parks itself and preserves the queue. To stop cleanly:
+## 1. Before anything else: get the account ID and prep the saves
 
 ```
-cd /opt/AGENTS/Ares/engagements/ps5-1400-kernel/probe
-for p in $(pgrep -f "swee[p].py"); do kill $p; done
+cd /opt/AGENTS/Ares/engagements/ps5-1400-kernel/kernel-hunt
+python3 prepare_usb_saves.py <account_id_decimale>
+python3 prepare_usb_saves.py --check
 ```
 
-Revert the shell-domain flip if it was applied:
-`/opt/AGENTS/Ares/tmp/dns_shell.sh revert`
+**The save binds to the PSN account, not the console.** The folder under `PS4/SAVEDATA/` must carry
+the account id as 16 lowercase hex digits. The conversion is self-tested against gezine's known
+`param.sfo` pair `8028911461577375126` → `6f6c6c6f7061bd96` before anything is touched.
+`--revert` puts the placeholder back.
 
----
+**Run `prepare_usb_saves.py` on the host, not in the container.** The saves live in the host's `/tmp`
+(`/tmp/test1_gezine`, `/tmp/test2_loader_pad_plain`, ...). The container has its own `/tmp` that does
+not hold them, so `--check` run from the container reports `MANCANTE` for every save. **That is the
+wrong place to look, not a lost save.** Same class as the probe-server loopback trap: a check run in the
+container against a path that exists only on the host returns an emptiness that names nothing about the
+cause. Verify with `ls -d /tmp/<dir>` over `sshcmd.js` before declaring a save missing. As of this
+writing both primary saves are confirmed intact on the host: `test1_gezine` 104857600 B sha256
+`75169f5f…`, `test2_loader_pad_plain` 104857600 B sha256 `5a4eb393…`.
 
-## 8. Matrix room ID, corrected
+## 1b. Confirm the trigger is actually polling before wasting a console session
 
-The room ID carried in earlier notes was **wrong by transcription**:
+**The runner is what fires when the console comes on. If it silently stopped polling, the foothold is
+never taken even with the PS5 on and the right save installed, and a whole console session is lost for
+nothing.** The log does not tell you: `wait_foothold` logs only at entry and at timeout, so silence is
+correct behaviour and cannot distinguish "polling" from "stuck in one long sleep".
+
+**CPU time does not answer either.** Two reads 12 seconds apart both show `TIME 00:00:00`, `STAT S`,
+which a process blocked on a single long sleep also shows. `strace` produced no output here.
+
+**What does answer is sampling `/proc/net/tcp` on the host.** Port 9026 is `0x2342`:
+
+```
+for i in $(seq 1 22); do
+  line=$(grep ":2342" /proc/net/tcp | head -1)
+  [ -n "$line" ] && echo "$(echo $line | awk '{print $4}') $(echo $line | awk '{print $3}')"
+  sleep 1
+done
+```
+
+**Observed, with the hex decoded little-endian:** `5B01A8C0` = 192.168.1.91, `5C01A8C0` =
+192.168.1.92. **The runner tries both candidates, about 3 seconds each, and cycles.** State is
+`02` SYN-SENT with nothing coming back, **not even a RST**, which is what a powered-off console with
+ICMP blocked looks like. A RST would have meant a live host with a closed port; no packet at all means
+the host is off. **The distinction reads without turning anything on.**
+
+**If `02` never appears across 20 seconds, the runner is not polling and the console session should be
+postponed until the trigger is fixed.**
+
+## 2. Test 1, the foothold. Costs about five minutes, zero build
+
+Install Raspberry Cube (CUSA16074). Import `test1_gezine` over USB in **binary** transfer mode, with
+the game installed but **not started**. Start the game.
+
+**Ask for a photo of the on-screen notification before doing anything else.** The loader prints:
+
+```lua
+notify(string.format("remote lua loader\nrunning on %s %s%s\nlistening on %s",
+    PLATFORM, console_model, FW_VERSION, network_str))
+```
+
+| field | what it settles |
+|---|---|
+| `PLATFORM` | whether the loader sees `ps5`. **If it reads `ps4`, every PS5 offset conclusion is void** and the gate is not the problem |
+| `console_model` | confirms CFI-2000 |
+| `FW_VERSION` | from `get_version()`, and it is **exactly the string `kernel_offset.lua` looks up to decide the `DATA_BASE_ALLPROC` gate** |
+| `IP:porta` | which of .91/.92 is live, without guessing |
+
+**This costs nothing, needs no network, and arrives even if the socket never answers.**
+
+## 3. Test 2, the objective. The supervisor drives it
+
+Once 9026 opens the runner fires step 0 then the payload. **Do not close Raspberry Cube during or
+after the test.** The documented panic (issue #133) is at game CLOSE, not during r/w.
+
+| output | meaning |
+|---|---|
+| `round-trip OK (read+write proved) @ <addr>` | **objective proved** |
+| `[read] inside_kdata legge "evf cv"` | arbitrary read proved |
+| `TEST2 PASS (discovery parziale)` | **objective reached**, post-exploitation skipped |
+| `fw not yet supported for jailbreaking` | **not a failure of the objective.** The gate exits `post_exploitation_ps5()`, not `kexploit()`. The r/w is already established before it |
+| `TEST2 FAIL: round-trip canary non completato` | the primitive itself is broken |
+| `TEST2 FAIL: exploit state 'kernel_rw' assente` | the payload exploit did not run |
+| `unable to find softc !!` / `unable to init iommu !!` / `unable to patch qa flags !!` | the IOMMU vuln is patched. Closes plan B with a named reason |
+
+**Step 0 runs first and must show `kernel_rw_initialized` false.** If it reads true, something
+already fired and the baseline is not clean, so a PASS cannot be credited to the current run.
+
+**Step 0 is read-only and isolated: every field is wrapped in its own `pcall` (`safe()` in
+`fingerprint.lua:9`), so a missing field returns `n/d` and never crashes the fingerprint or the
+chain.** It captures `lua_version`, `pid`, the nine loader modules, the firmware from both the syscall
+and the offsets module, `kernel_rw_initialized`, and `storage_kernel_rw`, bounded by
+`FINGERPRINT_BEGIN`/`FINGERPRINT_END`/`FINGERPRINT DONE`.
+
+**One cross-plan nuance to read the log correctly: step 0 runs once, before plan A, not between the
+plans.** If plan A fails to PASS but leaves `rw_initialized = true` and the `kernel_rw` storage written,
+plan B runs on plan A's leftover state, and the test after plan B reads plan A's storage. **A PASS there
+is still kernel r/w demonstrated, so the objective holds; it just cannot be attributed to plan B
+specifically.** Distinguishing the two would need a step 0 re-run between the plans, which the objective
+does not require.
+
+**Plan B (`p2jb_handoff`) is the only route to a full jailbreak on 14.00.** It has no table gate and
+does runtime discovery. Plan A reaches the r/w objective but loses everything below its gate.
+
+## 4. Browser path, secondary
+
+The landing page polls `/plan`. To add a probe you must do **both** steps, and neither warns if you
+skip one:
+
+```
+python3 register_history_probe.py     # into the library
+python3 add_to_live_plan.py           # into the served plan
+```
+
+**Three independent layers where "the test is written" did not mean "the test runs":**
+
+| layer | failure | how to catch it |
+|---|---|---|
+| library vs plan | `pg_tests.json` is not the queue | `/plan` serves a different count than the library has |
+| frozen update | the plan keeps the old code | code length in the plan differs from the library |
+| landing page | `/` serves a page that never asks for the plan | md5 of the served page vs `agent.html` |
+
+**None of the three raises an error. Each produces a silence that reads as "the test found nothing."**
+
+Verify the chain from the client side:
+
+```
+curl -sk --resolve manuals.playstation.net:443:127.0.0.1 https://manuals.playstation.net/ | md5sum
+curl -sk --resolve manuals.playstation.net:443:127.0.0.1 https://manuals.playstation.net/plan
+```
+
+**The `history.state` probe is not lethal.** `replaceState` does not UAF anything, so unlike the
+lethal cycles it does not require reopening the page.
+
+## 5. What the browser path cannot reach
+
+The browser path is a **userland** entry. WebKit UAF gives the WebProcess **heap** r/w; the kernel
+stage needs an **arbitrary kernel write**. Different address spaces.
+
+**The kind swap `0x80048002 -> 0x70048002` is a permission-check bypass, not a type confusion.**
+`CTLTYPE` (`& 0xf = 2`) is untouched; the flip makes the kernel skip `PRIV_SYSCTL_WRITE`. **A
+permission bypass is not a memory-safety violation.** The `sysctl` write branch was measured bounded:
+the bound is on `len` (`req->+0x38 - req->+0x40`), no bound on `oid_arg1`, direction user →
+`oid_arg1` via `rep movsq`, 0 chaining, 0 amplification. **The mechanism is characterized and the
+exploit is still missing. Those are two different gaps and solving one does not solve the other.**
+
+**There is no public kernel exploit for 14.00 or 14.10 at all.** Relapse stops at 13.60.
+
+## 6. Leaving the console again
+
+**Do not close Raspberry Cube.** Leave the runner and supervisor up; they wait through the whole
+`--wait` window and the supervisor restarts on rc=3.
+
+To stop the automation, **kill the supervisor, not the runner.** The supervisor is the loop and the
+runner is one iteration of it: a `kill <runner_pid>` is seen as a crash (rc=143, SIGTERM) and the
+supervisor starts a new runner 120 seconds later. **Killing the runner does not stop the automation.**
+
+```
+ps -eo pid,etime,cmd | grep -E "supervise_test|auto_test_1400"
+kill <supervise_test.sh PID>     # this stops it
+```
+
+**Never `pkill -f` on a pattern that appears in your own ssh command line**, which is why
+`pgrep -f sweep.py` looked like it had found something.
+
+Revert the saves to the placeholder if the account id was applied for a test:
+
+```
+python3 prepare_usb_saves.py --revert
+```
+
+The DNS rewrite stays: it is AdGuard's, and removing it breaks the browser entry.
+
+## 7. Matrix room ID, corrected
+
+The room ID carried in earlier notes was wrong by transcription:
 
 | | value |
 |---|---|
 | wrong (in prior notes) | `!JbVcVYRPqBWEgYrdj:chill.servebeer.com` |
 | **correct** | `!JbVcVUyRPqBWEgYrdj:chill.servebeer.com` |
 
-The dropped `Uy` made every send fail with `No such room with id ... found`, and
-`matrix_notify.py` masks it by falling back to a direct login that also fails
-(`LoginError: 'user_id' is a required property`).
+The dropped `Uy` made every send fail with `No such room with id ... found`, and `matrix_notify.py`
+masks it by falling back to a direct login that also fails (`LoginError: 'user_id' is a required
+property`). Discovery method: the bot's nio store at `/opt/AGENTS/Ares/matrix/matrix_store/*.db`,
+table `encryptedrooms`, column `room_id`.
 
-Discovery method: the bot's nio store at
-`/opt/AGENTS/Ares/matrix/matrix_store/*.db`, table `encryptedrooms`, column
-`room_id` (not `id`, column 0 is the internal row key).
-
-**Verified delivery contract:** the primary path is the bot HTTP listener on
-`127.0.0.1:8772/send` (pid 223923). `exit 0` from `matrix_notify.py` means the
-bot returned 200. Confirm independently with
-`matrix_read.py "<room>" 3`, done, message visible at 07:46.
-
-Note: a `[vault_env] load failed (vault auth failed: 429)` line on stderr is
-unrelated to delivery, the bot HTTP path does not use the vault.
+**Verified delivery contract:** the primary path is the bot HTTP listener on `127.0.0.1:8772/send`.
+`exit 0` from `matrix_notify.py` means the bot returned 200. Confirm independently with
+`matrix_read.py "<room>" 3`. A `[vault_env] load failed (vault auth failed: 429)` line on stderr is
+unrelated to delivery.
