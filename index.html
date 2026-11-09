@@ -2370,6 +2370,18 @@ issue the sync XHR and let the kernel write server-chosen bytes at the target. T
 full control because the response is ours, at a length we pick. Finding a <code>pop_rsp</code> gadget inside an
 execute-only binary is hard; controlling 4096 bytes of HTTP response is trivial. <strong>This moves part of
 the problem from the client side, where control is scarce, to the server side, where it is total.</strong></p>
+<p><strong>The write-through is a proposal, not yet implemented in the probe.</strong> The probe's own opening comment
+is explicit: <code>Non letale: nessuna UAF, nessun reopen della pagina</code>. <strong>The probe is deliberately without
+a UAF. It measures the client-side delta against the server delay and proves the block exists. It does
+not do the write-through.</strong> A regex searching the probe for <code>UAF</code> matches the words <code>nessuna UAF</code> in the
+comment that denies it and returns true; the code says there is none. <strong>The write-through requires three
+steps: allocate the response buffer, locate it through the UAF, redirect its pointer. Locating the
+buffer through the UAF is the byte-addressable read; redirecting the pointer is the byte-addressable
+write. Both are the bottleneck.</strong> <strong>So the blocked-thread write is not an independent route around the
+bottleneck; it is an idea that switches on only after the bottleneck is resolved.</strong> The block is verified
+(2010ms in the real engine). The write-through is an addition that depends on the same missing
+primitive. <strong>The block is there, the vehicle is there, the payload (the written bytes) needs the
+primitive we do not have.</strong></p>
 <p><strong>The enabler is built and measured rather than proposed.</strong> The probe server now delays a response on
 command, with the delay read from the query string so no plan change or restart is needed per
 measurement:</p>
