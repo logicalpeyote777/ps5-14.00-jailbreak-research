@@ -4828,6 +4828,14 @@ escape_filesystem_sandbox(proc)
 field relative to the <code>ucred</code> pointer: <code>cr_uid</code> at <code>+0x04</code>, <code>cr_ruid</code> at <code>+0x08</code>, <code>cr_svuid</code> at
 <code>+0x0C</code>, <code>cr_ngroups</code> at <code>+0x10</code>, <code>cr_rgid</code> at <code>+0x14</code>, then <code>cr_sceAuthID</code>, <code>cr_sceCaps[0..1]</code>
 and <code>cr_sceAttrs</code> at named offsets. <strong>No absolute kernel data address anywhere.</strong></p>
+<p><strong>The named offsets are hardcoded local constants, not firmware-table fields, which is the concrete
+proof that the jailbreak does not depend on the table's coverage.</strong> <strong><code>p2jb_handoff.lua:1083-1088</code>
+defines <code>OFFSET_UCRED_CR_SCEAUTHID = 0x58</code>, <code>OFFSET_UCRED_CR_SCECAPS = 0x60</code>,
+<code>OFFSET_UCRED_CR_SCEATTRS = 0x83</code>, <code>OFFSET_P_UCRED = 0x40</code> and <code>SYSTEM_AUTHID =
+0x4800000000010003</code> as <code>local</code> values in the module, not as entries resolved from
+<code>kernel_offset</code>.</strong> <strong>They are the same on 14.00 as on every firmware, because they never came from the
+1.00-to-12.02 table.</strong> <strong>The <code>cr_sceCaps</code> pair is written as two <code>-1</code> qwords at <code>+0x60</code> and <code>+0x68</code>,
+enabling every app capability, and <code>cr_sceAttrs</code> is set to <code>0x80</code>.</strong></p>
 <p><strong>The contrast with plan A is structural, not a matter of degree.</strong> Plan A loses <code>data_base</code>, <code>allproc</code>,
 <code>base</code>, <code>dmap_base</code> and <code>kernel_cr3</code> because they are set inside <code>get_additional_kernel_address()</code>,
 past the gate, and <code>apply_patches_to_kernel_data</code> hangs entirely off <code>DATA_BASE_SECURITY_FLAGS</code>.
