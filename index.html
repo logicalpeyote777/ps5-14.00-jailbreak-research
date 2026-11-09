@@ -3503,29 +3503,51 @@ the read proof and the write proof separated, because what <code>inside_kdata</c
 to matter for safety.</p>
 <p><code>inside_kdata</code> is <code>evf.cv.cv_description</code>, the address of the constant string <code>"evf cv"</code> in the
 kernel's mapped ELF file (<code>:1051-1053</code>), not a scratch area. Lapse only ever reads it, checking it at
-<code>:1585</code> and <code>:1597</code>. Writing there is a different matter: <code>restricted_kwrite8</code> writes 20 bytes
-rather than 8 (<code>kwrite20</code> at <code>:1579</code>, with the code's own note that it overwrites other pktopts
-fields up to 20 bytes), so a canary there would put 20 bytes onto mapped kernel image data, with a
-wider risk window than the 8 bytes being tested and the possibility of hitting a read-only page under
-<code>copyin</code>, which panics.</p>
+<code>:1585</code> and <code>:1597</code>. Writing there is a different matter: a read-only page under <code>copyin</code> panics, and
+this is mapped kernel image data.</p>
+<p>The width of the write was checked rather than assumed, since the exploit's own <code>restricted_kwrite8</code>
+writes 20 bytes (<code>kwrite20</code> at <code>:1579</code>, with the code's note that it overwrites other pktopts fields
+up to 20 bytes). That helper belongs to lapse's exploitation setup and is not the path the test takes:</p>
+<pre><code class="language-lua">-- kernel.lua:72-74
+function kernel.write_qword(dest, value)
+    kernel.write_buffer(dest, ub8(value):sub(1,8))     -- 8 bytes
+end
+
+-- kernel.lua:213-215
+function ipv6_kernel_rw.write_buffer(kaddr, buf)
+    ipv6_kernel_rw.copyin(lua.resolve_value(buf), kaddr, #buf)
+end
+
+-- kernel.lua:185-200
+function ipv6_kernel_rw.copyin(uaddr, kaddr, len)
+    ...
+    syscall.write(ipv6_kernel_rw.data.pipe_write_fd, uaddr, len)   -- len = 8
+end
+</code></pre>
+<p>The canary therefore writes exactly 8 bytes through the pipe. The wider-window concern does not apply;
+the read-only-page concern does, which is why <code>inside_kdata</code> stays out of the write candidates.</p>
 <p><strong>The criterion is therefore split in two.</strong> The read is proven by reading <code>inside_kdata</code> as a string
 and matching <code>"evf cv"</code>: a string that lives in the kernel image and exists nowhere in user memory, so
 the read cannot be a self-inflicted echo, and no write is involved. The write is proven by a
-round-trip against <code>curproc + PROC_PID</code>, which lives in writable kernel data: read the real PID,
-write the canary, read it back, restore, and verify the original PID has returned. The restore is
-verified twice over, and the window is microseconds. Remaining candidates are <code>curproc+0x1000</code>,
-<code>curproc_fd+0x100</code> and <code>curproc_ofiles+0x100</code>, with the complete bases used only where the table
-covers the firmware. The harness reports which fields resolved:</p>
+round-trip against <code>curproc + p_comm</code>, the process name buffer, which is the most inert writable
+target reachable. <code>PROC_COMM</code> is resolved at runtime with <code>find_proc_offsets</code> (<code>kernel_offset.lua:480</code>,
+a global after <code>require "kernel_offset"</code> at <code>main.lua:56</code>), because the table leaves it at <code>-1</code>
+(<code>:356-357</code>, <code>:400-401</code>). <code>p_comm</code> is a character buffer the kernel reads only for display through
+sysctl and procfs, so a transient canary shows a wrong process name for microseconds and touches
+neither scheduling nor locking. <code>curproc + PROC_PID</code> is kept as a fallback, less inert because the PID
+is read by scheduling and procfs lookups. The harness reports what it resolved:</p>
 <pre><code>[addr] disponibili: curproc=0x100000 curproc_fd=0x200000 curproc_ofiles=0x300000 inside_kdata=0x400000
 [addr] non risolti: data_base allproc base dmap_base kernel_cr3
 [read] inside_kdata legge &quot;evf cv&quot; -&gt; READ arbitraria provata
        (stringa del kernel ELF mappato, assente in memoria utente)
+[write] PROC_COMM risolto a runtime = 0x10  (PROC_SYSENT = 0x98)
+[write] p_comm corrente = &quot;RaspberryCube&quot;
 [write] PID reale letto a curproc+0xbc = 0x55667788
-[canary] 4 indirizzi candidati, provo il round-trip
-  [curproc+PROC_PID] read originale = 0x55667788
-  [curproc+PROC_PID] readback canary = 0x45464800  -&gt; WRITE provato
-  [curproc+PROC_PID] restore verificato = 0x55667788
-round-trip OK (read+write proved) @ curproc+PROC_PID
+[canary] 6 indirizzi candidati, provo il round-trip
+  [curproc+p_comm] read originale = 0x55667788
+  [curproc+p_comm] readback canary = 0x45464800  -&gt; WRITE provato
+  [curproc+p_comm] restore verificato = 0x55667788
+round-trip OK (read+write proved) @ curproc+p_comm
 p_comm walk: skipped (discovery failed: kernel.addr.allproc non risolto)
 
 === TEST2 PASS (discovery parziale): kernel arbitrary read AND write dimostrato ===
