@@ -4882,6 +4882,18 @@ only for the duration of the kexp, then returns to its PS4 table, and a payload 
 restore so the game is not left with an inconsistent table.</strong> <strong>The residual risk is whether
 <code>SceGameLiveStreaming</code> is present on 14.00 with a compatible table; if it is not, <code>find_proc_by_name</code>
 fails with the named error <code>failed to find proc addr of SceGameLiveStreaming</code>.</strong></p>
+<p><strong>How <code>find_proc_by_name</code> locates that process is itself a runtime walk, and it closes the loop on the
+three runtime discoveries that make the swap possible.</strong> <strong><code>find_proc_by_name</code> (<code>kernel.lua:364</code>) checks
+the kernel read/write, asserts <code>allproc</code> is set, then walks the process list from the <code>allproc</code> head via
+<code>le_next</code> (<code>proc + 0x0</code>), reading each process's name as a null-terminated string at
+<code>proc + PROC_COMM</code> and comparing it to the target.</strong> <strong>It returns the proc on a match and <code>nil</code> at the
+end of the list (<code>proc == 0</code>), so the walk is bounded by the list's own terminator rather than hanging.</strong>
+<strong>Its three dependencies are all runtime-discovered: <code>allproc</code> from the <code>find_allproc</code> mask walk,
+<code>PROC_COMM</code> from the <code>find_proc_offsets</code> byte signatures, and the string read from the kernel
+primitive.</strong> <strong>None comes from the firmware table.</strong> <strong>The chain is: <code>find_allproc</code> finds the list head,
+<code>find_proc_offsets</code> finds where the name lives inside each proc, <code>find_proc_by_name</code> walks the list
+reading names until it finds <code>SceGameLiveStreaming</code>, and the swap borrows that process's PS5 table.</strong>
+<strong>Three runtime discoveries, one swap, and the kexp gets the syscall table it needs.</strong></p>
 <p>The two <code>find_allproc</code> implementations make the difference concrete. Plan A uses the table field as a
 validity check on the mask match (<code>lapse.lua:1807-1823</code>):</p>
 <pre><code class="language-lua">if bit64.band(proc, KDATA_MASK) == KDATA_MASK then
