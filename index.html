@@ -3475,6 +3475,37 @@ gap rather than a failure. The fallback ladder is ordered: run it and see, since
 touch the measured chain; otherwise the gezine save is already the foothold validator and carries no
 divergence; and only if Test 2 fails to import while Test 1 passes does the read-only flag become the
 prime suspect, at which point the mkpfs validation is patched locally and the image rebuilt.</p>
+<p><strong>That third option has been built and verified, so the ladder has no gap in it.</strong> A writable variant
+now sits alongside the other two packages, produced by patching the byte in the header packer
+(<code>struct.pack_into("&lt;BBBB", hdr, 0x18, 0, 0, 1, 0)</code> to <code>..., 0, 0, 0, 0)</code>, since the third byte
+lands on <code>0x1A</code>) and relaxing the post-write check to accept <code>readonly</code> in <code>{0, 1}</code>. Two build
+errors along the way are worth recording because both are the kind that silently produce a wrong
+image. Without <code>--block-size 32768</code> the tool uses its 65536 default and yields <code>ndblock = 1615</code> at
+105840640 bytes, which conflicts with <code>SAVEDATA_BLOCKS = 3200</code> in the <code>param.sfo</code>: the same
+geometry mismatch already met and fixed on the V-pad. With the block size corrected but the original
+padding, the image is born at <code>ndblock = 3215</code>, fifteen blocks over the target, so <code>pad.dat</code> had to
+come down by <code>15 * 32768 = 491520</code> bytes. The verified result:</p>
+<pre><code>file size: 104857600
+  .block_size = 32768
+  .ndblock = 3200
+  .readonly = 0
+</code></pre>
+<p>Same byte length as the primary V-pad, <code>ndblock</code> exactly 3200, <code>readonly</code> cleared. The tool flags it
+with the expected <code>header readonly byte is 0, expected 1</code> and completes. <strong>The file set is identical
+to the primary: <code>mkpfs tree</code> on both yields 34 lines and <code>diff</code> reports nothing</strong>, so the only
+functional difference is the flag. The package is at
+<code>/tmp/test2_loader_pad_rw/PS4/SAVEDATA/ACCOUNT_ID_PLACEHOLDER/</code>, <code>savedata</code> 104857600 bytes with
+sha256 <code>3b1115e31b443c4111ab1639adda54d38cbd778d11b3bd8857bf689e8dc3fab4</code>, and <code>savedata.bin</code>
+carrying the same SBL key block as the other packages (<code>4f954291…</code>), so the zero-key unseal path is
+unchanged.</p>
+<p><strong>One comparison that must not be drawn.</strong> Attempting to compare inode write bits between the two
+saves leads to a false conclusion. The gezine original's inode modes and flags come out at high
+entropy (<code>0xE457</code>, <code>0x2EFC</code>, <code>0x9921DC3E</code>), which is encrypted data read with the wrong key: the
+zero key is not that image's real key. Ours come out uniform and structured (<code>0x416D</code>,
+<code>0x0002000C</code>) because we built them with the zero key. So "<code>write_bits</code> true on all gezine inodes,
+false on ours" is an artifact of asymmetric decryption, not a difference. What remains real is the
+header <code>readonly</code> difference, because both headers decrypt coherently, with magic, version and block
+size all sane in both cases.</p>
 <p><strong>The <code>mkpfs tree</code> failure on the gezine original is a tool defect, not a corrupt image.</strong> It raises
 <code>OSError: [Errno 22] Invalid argument</code> on <code>fh.seek(offset)</code> inside <code>verify_signed_image_signatures</code>
 (<code>pfs.py:5141</code> → <code>:371</code> → <code>utils.py:228</code>), which runs after the header and inodes have already been
