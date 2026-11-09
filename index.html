@@ -166,6 +166,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </li>
 <li><a href="#15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser [new]</a><ul>
 <li><a href="#151-a-second-gate-indexed-by-firmware-table-rather-than-by-version-number">15.1 A second gate, indexed by firmware table rather than by version number</a></li>
+<li><a href="#152-the-other-exploit-does-not-touch-the-table-at-all">15.2 The other exploit does not touch the table at all</a></li>
 </ul>
 </li>
 <li><a href="#16-conclusion-new">16. Conclusion [new]</a></li>
@@ -3929,26 +3930,82 @@ of the objective: it has to be read alongside the round-trip. Getting the full j
 value of `DATA_BASE_ALLPROC` for 14.00, a structural offset determinable from the decrypted PUP,
 and that decryption remains blocked on the L1 key in Titania.
 
-### 15.2 The other exploit does not touch the table at all
-
-Comparing the two payload files on one specific question, how much each depends on the per-firmware
-offset table, produces an asymmetry that changes what each route can deliver.
-
-| | Plan A `lapse.lua` | Plan B `p2jb_handoff.lua` |
-|---|---|---|
-| Version gate | none | lifted (`&gt; 99` at `:1285`) |
-| `DATA_BASE_ALLPROC` gate | **fires on 14.00** (`:1793`) | **none** |
-| `DATA_BASE_*` dependencies | many: allproc, base, dmap, security flags, rootvnode | **zero** |
-| Fields read from `kernel_offset` | 20 or more | **one**: `PROC_COMM` at `:1247` |
-| `allproc` resolution | validated through `DATA_BASE_ALLPROC` | pure `KDATA_MASK` walk |
-| `PROC_COMM` / `PROC_SYSENT` | from the table, `-1` and unresolved on 14.00 | runtime pattern discovery |
-| Privilege escalation | skipped, past the gate | performed at `:1243` |
-| `qa_flags` patch | skipped | via kexp at `:1251` |
-
-Plan B's single table field is overwritten at runtime before use:
+**The string that decides the gate is printed on screen before anything is fired, which makes the gate
+observable rather than inferred.** The loader in the save announces itself with:
 
 ```lua
--- p2jb_handoff.lua:1240-1251
+notify(string.format(&quot;remote lua loader\nrunning on %s %s%s\nlistening on %s&quot;,
+    PLATFORM, console_model, FW_VERSION, network_str))
+</code></pre>
+<p><strong><code>FW_VERSION</code> comes from <code>get_version()</code> and is exactly the string <code>kernel_offset.lua</code> looks up to
+decide whether <code>DATA_BASE_ALLPROC</code> exists.</strong> A photograph of that notification therefore carries, at
+zero cost and before any exploit runs, the platform the loader believes it is on, the console model,
+the firmware string the table lookup will use, and which of the two candidate addresses the loader
+bound to. It arrives even when the socket does not answer.</p>
+<p><strong>The field that matters most is <code>PLATFORM</code>, and it can invalidate everything else.</strong> If the
+notification reads <code>ps4</code> rather than <code>ps5</code>, the gate is not the problem: the save is running down the
+wrong branch, and every conclusion drawn from PS5 offsets is void. Distinguishing "the gate fired as
+expected" from "the loader did not recognise the platform" is two different diagnoses with two
+different remedies, and the notification separates them without spending a run.</p>
+<p><strong>The port itself was also confirmed in code rather than assumed:</strong> <code>main.lua:314</code> sets <code>local port =
+9026</code> and the loader binds <code>INADDR_ANY</code> with <code>syscall.listen(sock_fd, 3)</code>, so the port the runner
+waits on is the port the save opens.</p>
+<h3 id="152-the-other-exploit-does-not-touch-the-table-at-all">15.2 The other exploit does not touch the table at all</h3>
+<p>Comparing the two payload files on one specific question, how much each depends on the per-firmware
+offset table, produces an asymmetry that changes what each route can deliver.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Plan A <code>lapse.lua</code></th>
+<th>Plan B <code>p2jb_handoff.lua</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Version gate</td>
+<td>none</td>
+<td>lifted (<code>&gt; 99</code> at <code>:1285</code>)</td>
+</tr>
+<tr>
+<td><code>DATA_BASE_ALLPROC</code> gate</td>
+<td><strong>fires on 14.00</strong> (<code>:1793</code>)</td>
+<td><strong>none</strong></td>
+</tr>
+<tr>
+<td><code>DATA_BASE_*</code> dependencies</td>
+<td>many: allproc, base, dmap, security flags, rootvnode</td>
+<td><strong>zero</strong></td>
+</tr>
+<tr>
+<td>Fields read from <code>kernel_offset</code></td>
+<td>20 or more</td>
+<td><strong>one</strong>: <code>PROC_COMM</code> at <code>:1247</code></td>
+</tr>
+<tr>
+<td><code>allproc</code> resolution</td>
+<td>validated through <code>DATA_BASE_ALLPROC</code></td>
+<td>pure <code>KDATA_MASK</code> walk</td>
+</tr>
+<tr>
+<td><code>PROC_COMM</code> / <code>PROC_SYSENT</code></td>
+<td>from the table, <code>-1</code> and unresolved on 14.00</td>
+<td>runtime pattern discovery</td>
+</tr>
+<tr>
+<td>Privilege escalation</td>
+<td>skipped, past the gate</td>
+<td>performed at <code>:1243</code></td>
+</tr>
+<tr>
+<td><code>qa_flags</code> patch</td>
+<td>skipped</td>
+<td>via kexp at <code>:1251</code></td>
+</tr>
+</tbody>
+</table>
+<p>Plan B's single table field is overwritten at runtime before use:</p>
+<pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
 kernel.addr.allproc = find_allproc()          -- runtime, no table
 
 escalate_curproc()                            -- real privilege escalation
