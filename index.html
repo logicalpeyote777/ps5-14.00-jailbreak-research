@@ -1993,6 +1993,26 @@ pointers.</strong> In fact the wrong type was sprayed. <strong>A false conclusio
 comparison and a badly designed experiment. The cost of finding that out afterwards is a wasted
 console session and a wrong result on the record; the cost of finding it beforehand is five minutes
 of reading.</strong></p>
+<p><strong>The preconditions were then verified in a real browser engine rather than only in the Node mock.</strong>
+Node has <code>structuredClone</code> but is not WebKit, has no history API with the same origin restrictions, and
+does not reproduce the renderer's security model. Running the assertions in Chromium through Playwright
+against the probe server page:</p>
+<pre><code class="language-json">{&quot;getter_fired&quot;: 1, &quot;state_readable&quot;: true, &quot;hist_sharing&quot;: true, &quot;clone_sharing&quot;: true}
+</code></pre>
+<p><strong>All four true in a real engine: the getter fires during <code>replaceState</code>, <code>history.state</code> reads back,
+<code>replaceState</code> preserves the shared reference between <code>a</code> and <code>b</code>, and <code>structuredClone</code> preserves
+sharing.</strong> The corrected probe rests on preconditions confirmed in a real engine, not only in the
+simulation.</p>
+<p><strong>A URL-form bug surfaced on the way, and it is the kind that produces a false "blocked".</strong> In this
+setup <code>history.replaceState({x:1}, "", location.pathname)</code> throws <code>SecurityError</code> while
+<code>history.replaceState({x:1}, "", location.href)</code> returns OK. <strong>A probe using the wrong form reports
+<code>outcome: "blocked"</code> when the channel actually works, and the block is ours rather than the console's.</strong>
+The registered probe uses <code>location.pathname + location.search</code>, the complete form that works; the
+bare <code>pathname</code> was the one tested first.</p>
+<p><strong>Each precondition verified offline removes one available explanation for a negative on the device.</strong>
+The PS5 already reports <code>history.state</code> available. With these four confirmed in a real engine, a
+<code>getter_fired: 0</code> on 14.00 means narrowly that WebKit's history on that firmware does not serialise
+getters, and cannot be excused as an environment or URL-form problem.</p>
 <pre><code class="language-js">/* FIX: ritorna un thenable no-op. La patch sincrona ha tolto la Promise,
    ma 125 moduli chiamano post(...).then(...). Senza questo, muoiono
    di &quot;undefined is not an object&quot; sulla primissima riga. */
