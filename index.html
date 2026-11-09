@@ -4896,6 +4896,21 @@ need the table because it is not asking the table anything.</strong></p>
 It reads 0x1000 bytes from <code>curproc</code> and recovers both offsets from known byte signatures,
 <code>"ce fa ef be cc bb"</code> for <code>p_comm</code> and <code>"ff ff ff ff ff ff ff 7f"</code> for <code>p_sysent</code>, with no
 reference to the firmware version anywhere in the function.</p>
+<p><strong>The offsets are computed from the signature positions, not read from a table: <code>p_comm_offset =
+sign[1] - 1 + 0x8</code> and <code>p_sysent_offset = sign[1] - 1 - 0x10</code> (<code>:496-497</code>), and a missing signature
+raises a named error (<code>failed to find offset for PROC_COMM</code> / <code>PROC_SYSENT</code>) rather than returning a
+wrong value.</strong> <strong>The <code>p_sysent</code> signature <code>ff ff ff ff ff ff ff 7f</code> is the little-endian byte pattern of
+a large userland pointer (<code>0x7fffffffffff</code>), which is what <code>p_sysent</code> holds; the <code>p_comm</code> signature is a
+magic marker in the structure.</strong> <strong>Both are structural markers in the proc layout, a platform constant,
+which is why the discovery works on 14.00: the signatures are there because the structure is the same,
+not because the table knows them.</strong></p>
+<p><strong>With this the two runtime discoveries of plan B form a complete picture of its independence from the
+firmware table.</strong> <strong><code>find_allproc</code> finds the <code>allproc</code> anchor by walking the proc list until the
+kernel-data mask matches; <code>find_proc_offsets</code> finds <code>PROC_COMM</code> and <code>PROC_SYSENT</code> by searching the proc
+structure for byte signatures.</strong> <strong>Both start from <code>curproc</code>, the gate survivor, and both use structural
+patterns that are platform constants.</strong> <strong>Neither asks the firmware table for anything, which is the
+structural reason plan B never meets the <code>DATA_BASE_ALLPROC</code> gate: it does not use the fields the gate
+controls.</strong></p>
 <p><strong>The consequence is that on 14.00 the two routes are not interchangeable, which is how they had
 been treated up to this comparison.</strong> Plan A reaches the kernel read/write objective but loses
 everything below its gate, so it cannot produce a complete jailbreak on a firmware the table does not
