@@ -3478,6 +3478,41 @@ what separates them.</strong></p>
 </tr>
 </tbody>
 </table>
+<p><strong>"Outside the loader" now has a concrete meaning, and it was checked rather than inferred.</strong> A search
+for the exploit files inside the save returns nothing: <code>find /tmp/test1_gezine /tmp/test2_loader_build
+-name "lapse*.lua"</code> yields no result, and <code>src_pad</code> has no <code>p2jb_handoff.lua</code> either. <strong>The save
+contains the loader; the exploit Lua is transmitted at runtime over TCP 9026.</strong> What the save ships is
+<code>main.lua</code>, <code>kernel.lua</code>, <code>kernel_offset.lua</code>, <code>ropchain.lua</code>, <code>syscall.lua</code> and the rest of the
+loader modules, plus the ELF payloads.</p>
+<p><strong>The execution path in the loader:</strong></p>
+<pre><code class="language-lua">local lua_code = memory.read_buffer(buf, size)
+run_lua_code(lua_code)
+syscall.close(client_fd)
+</code></pre>
+<p>and inside <code>run_lua_code</code>:</p>
+<pre><code class="language-lua">local script, err = loadstring(lua_code)
+local env = {
+    print  = function(...) ... syscall.write(client_fd, out, #out) end,
+    printf = function(fmt, ...) ... syscall.write(client_fd, out, #out) end
+}
+setmetatable(env, { __index = _G })
+setfenv(script, env)
+err = run_with_coroutine(script)
+</code></pre>
+<p><strong>The environment is constructed, not inherited: it starts with only <code>print</code> and <code>printf</code>.</strong> But
+<code>setmetatable(env, { __index = _G })</code> drops every other name onto <code>_G</code>, so <code>kernel</code>, <code>syscall</code>,
+<code>storage</code> and <code>require</code> all resolve through the loader's globals. <strong>The environment is not
+restrictive; it overrides two functions to redirect output to the client socket.</strong> That is also why
+test output comes back over 9026: <code>print</code> and <code>printf</code> are rewritten to write on <code>client_fd</code>, not to
+stdout.</p>
+<p><strong>This closes a failure mode that would have been expensive to discover on device.</strong> If the transmitted
+Lua had no access to <code>storage</code>, <code>storage.set("kernel_rw", ...)</code> would have failed and looked like an
+exploit failure rather than an environment problem. <strong>Checked beforehand, at zero cost.</strong></p>
+<p><strong>One concrete limit worth knowing: <code>local maxsize = 500 * 1024</code>, a 500 KB cap on the Lua payload.</strong>
+<code>lapse.lua</code> at 62 869 B is 12% of it and <code>p2jb_handoff.lua</code> at 45 891 B is 9%, so there is no
+overrun risk, but a payload with embedded data would hit the ceiling. <strong>And the operational consequence
+of the architecture: the save does not get rebuilt to change exploit. The file on the host changes and
+gets sent, so one save serves both plans.</strong></p>
 <p><strong>The point that reframes the whole test: the loader does not produce the <code>kernel_rw</code> state, it
 consumes it.</strong> <code>kernel.lua:329</code> is a read, <code>local state = storage.get("kernel_rw")</code>, and no file
 in the save data performs a <code>storage.set</code> of that key. <strong>The state is written by the exploit
