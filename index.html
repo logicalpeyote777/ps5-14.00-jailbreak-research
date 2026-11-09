@@ -3746,6 +3746,24 @@ writable alias; <code>mmap(..., PROT_RWX, ...)</code> at <code>:119</code> gives
 <code>dlsym(0x2001, "getpid")</code> at <code>:184</code> resolves symbols inside the running process. <strong>The control
 channel is TCP: the loader opens a listening socket and Lua is pushed to it from a workstation, so
 once the loader runs the console is commanded over the network rather than through the console.</strong></p>
+<p><strong>The loader carries two distinct read/write primitives, not one.</strong> <strong><code>memory</code> is the userland read/write,
+required at <code>main.lua:50</code> and provided by the loader's native side: <code>memory.alloc</code>, <code>memory.read_qword</code>,
+<code>memory.write_dword</code> and <code>memory.memcpy</code> operate on the game process's own memory.</strong> <strong><code>kernel</code> is the
+kernel read/write built on the ipv6 primitive: <code>kernel.read_qword</code> and <code>kernel.write_buffer</code> operate on
+kernel memory.</strong> <strong><code>elf_loader:run</code> (<code>elf_loader.lua:169</code>) is where the two meet.</strong> <strong>It uses the userland
+read/write to build the argument struct that carries the kernel read/write's own data into the native
+payload: <code>memory.write_dword(rwpipe, ...pipe_read_fd)</code> and <code>+0x4</code> with the write fd, and
+<code>memory.write_dword(rwpair, ...master_sock)</code> and <code>+0x4</code> with the victim sock.</strong> <strong>The 0x30-byte struct
+then holds the syscall wrapper at <code>+0x00</code>, the pipe pointer at <code>+0x08</code>, the socket-pair pointer at
+<code>+0x10</code>, the kernel pipe address at <code>+0x18</code>, <code>kernel.addr.data_base</code> at <code>+0x20</code>, and the payload output
+pointer at <code>+0x28</code>.</strong> <strong>The userland read/write builds the bridge that the kernel read/write crosses.</strong></p>
+<p><strong>One concrete consequence follows from that struct.</strong> <strong>Argument 5 is <code>kernel.addr.data_base</code>, a plan A
+field.</strong> <strong>On 14.00 <code>data_base</code> is nil because it is set inside <code>get_additional_kernel_address()</code>, past
+the <code>DATA_BASE_ALLPROC</code> gate, so the native payload receives a nil <code>data_base</code>.</strong> <strong>Whatever the native
+payload does with that field does not work on 14.00.</strong> <strong>Plan B is untouched by this because
+<code>p2jb_handoff.lua</code> contains no reference to <code>DATA_BASE</code> at all, and its own spawn struct passes <code>allproc</code>
+rather than <code>data_base</code>.</strong> <strong>The nil reaching the native payload is a concrete difference between the two
+plans at the same handoff point.</strong></p>
 <p><strong>The native execution of the kexp was read in full at <code>spawn_payload</code> (<code>p2jb_handoff.lua:1191</code>).</strong> <strong>It
 resolves <code>scePthreadCreate</code> and <code>scePthreadJoin</code> through <code>dlsym</code>, reads <code>ps5-elfldr.elf</code> and
 <code>ps5-kexp.bin</code> from <code>/data/</code> or the save's <code>savedata0/</code> path (a named error if either is missing),
