@@ -3788,9 +3788,13 @@ string that identifies which native step failed.</strong> <strong>First an IOMMU
 creates the elfldr thread (<code>failed to create elfldr thread !!</code> on failure).</strong></p>
 <p><strong>The qa_flags patch is the native jailbreak, and its signature is a magic value.</strong> <strong>The disassembly at
 <code>0x1043</code> through <code>0x10ca</code> shows the kernel write helper (<code>call 0x1890</code>) storing the constant
-<code>0x13370000</code> at <code>qa_flags_base + 0xc0</code>, with further writes at <code>+0x100</code>, <code>+0x104</code> and <code>+0x200</code>.</strong>
-<strong>The pointers to the qa_flags structure are located at runtime, but the offsets inside the structure where
-the patch writes are hardcoded in the kexp.</strong> <strong>This is the point of fragility for 14.00: if the qa_flags
+<code>0x13370000</code> at <code>qa_flags_base + 0xc0</code>.</strong> <strong>This is the only write to the qa_flags structure.</strong> <strong>The other
+writes in the same region, at <code>+0x100</code>, <code>+0x104</code>, <code>+0x200</code> and <code>+0x204</code>, go to the mmap buffer (the global
+at <code>0x4920</code>) that holds the patch's results, not to the qa_flags.</strong> <strong>Distinguishing them matters: the
+qa_flags patch is a single write, and the layout risk is concentrated on the one offset <code>+0xc0</code>, not spread
+across four.</strong>
+<strong>The pointers to the qa_flags structure are located at runtime, but the offset inside the structure where
+the patch writes is hardcoded in the kexp.</strong> <strong>This is the point of fragility for 14.00: if the qa_flags
 layout changed, those hardcoded offsets land on the wrong fields, and the patch either fails with
 <code>unable to patch qa flags !!</code> or writes a value that does not enable the jailbreak.</strong> <strong>The kexp's own
 <code>before qaf</code>/<code>after qaf</code> readback shows whether the patch took: if <code>after qaf</code> is unchanged, the patch did
