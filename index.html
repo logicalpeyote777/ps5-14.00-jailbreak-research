@@ -166,7 +166,6 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </li>
 <li><a href="#15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser [new]</a><ul>
 <li><a href="#151-a-second-gate-indexed-by-firmware-table-rather-than-by-version-number">15.1 A second gate, indexed by firmware table rather than by version number</a></li>
-<li><a href="#152-the-other-exploit-does-not-touch-the-table-at-all">15.2 The other exploit does not touch the table at all</a></li>
 </ul>
 </li>
 <li><a href="#16-conclusion-new">16. Conclusion [new]</a></li>
@@ -3535,89 +3534,77 @@ a global after <code>require "kernel_offset"</code> at <code>main.lua:56</code>)
 (<code>:356-357</code>, <code>:400-401</code>). <code>p_comm</code> is a character buffer the kernel reads only for display through
 sysctl and procfs, so a transient canary shows a wrong process name for microseconds and touches
 neither scheduling nor locking. <code>curproc + PROC_PID</code> is kept as a fallback, less inert because the PID
-is read by scheduling and procfs lookups. The harness reports what it resolved:</p>
-<pre><code>[addr] disponibili: curproc=0x100000 curproc_fd=0x200000 curproc_ofiles=0x300000 inside_kdata=0x400000
+is read by scheduling and procfs lookups.</p>
+<p><strong>The <code>p_comm</code> offset is validated by its content rather than trusted, because the loader's own guard
+around it cannot fire.</strong> <code>find_pattern</code> (<code>misc.lua:143-154</code>) returns a table that is empty when nothing
+matches, and an empty table is truthy in Lua, so the check <code>if not p_comm_sign then error("failed to
+find offset for PROC_COMM") end</code> at <code>kernel_offset.lua:488-490</code> is unreachable. When the magic is
+absent, <code>p_comm_sign[1]</code> is <code>nil</code> and <code>p_comm_sign[1] - 1 + 0x8</code> dies with an unnamed arithmetic
+error that does not say which of the two patterns was missing. The same applies to <code>p_sysent_sign</code>. The
+magic <code>ce fa ef be cc bb</code> is not written by any loader module, and <code>PROC_COMM</code> is only ever assigned
+(<code>p2jb_handoff.lua:1259</code>) and never read by either exploit, so whether that pattern is a constant
+present in Sony's <code>struct proc</code> is plausible but not something we confirmed offline. The test therefore
+gates on printability, <code>cur_name:match("^[%g ]+$")</code>, and only writes to <code>p_comm</code> when the content
+confirms the offset. Both branches were exercised on a Lua VM:</p>
+<pre><code>[write] p_comm corrente = &quot;RaspberryCube&quot;
+[write] contenuto stampabile: offset confermato, p_comm usato
+round-trip OK (read+write proved) @ curproc+p_comm
+
+[write] p_comm corrente = &quot;Îúï¾&quot;
+[write] contenuto non stampabile: offset p_comm non attendibile, salto questo target
+round-trip OK (read+write proved) @ curproc+PROC_PID
+</code></pre>
+<p><strong>A priority follows from this.</strong> <code>curproc + PROC_PID</code> carries the highest-certainty offset of the two,
+since <code>0xbc</code> is independently confirmed by lapse at <code>:1518-1523</code>, which reads the PID out of kernel
+memory and compares it against <code>syscall.getpid()</code>. <code>p_comm</code> has the lower impact when wrong, display
+only, but a less certain origin for its offset. The printability gate closes exactly that gap. The
+harness reports what it resolved:```
+[addr] disponibili: curproc=0x100000 curproc_fd=0x200000 curproc_ofiles=0x300000 inside_kdata=0x400000
 [addr] non risolti: data_base allproc base dmap_base kernel_cr3
-[read] inside_kdata legge &quot;evf cv&quot; -&gt; READ arbitraria provata
+[read] inside_kdata legge "evf cv" -&gt; READ arbitraria provata
        (stringa del kernel ELF mappato, assente in memoria utente)
 [write] PROC_COMM risolto a runtime = 0x10  (PROC_SYSENT = 0x98)
-[write] p_comm corrente = &quot;RaspberryCube&quot;
+[write] p_comm corrente = "RaspberryCube"
 [write] PID reale letto a curproc+0xbc = 0x55667788
 [canary] 6 indirizzi candidati, provo il round-trip
   [curproc+p_comm] read originale = 0x55667788
   [curproc+p_comm] readback canary = 0x45464800  -&gt; WRITE provato
   [curproc+p_comm] restore verificato = 0x55667788
 round-trip OK (read+write proved) @ curproc+p_comm
-p_comm walk: skipped (discovery failed: kernel.addr.allproc non risolto)
-
-=== TEST2 PASS (discovery parziale): kernel arbitrary read AND write dimostrato ===
-</code></pre>
-<p><strong>The gate draws a line between two results that were previously conflated.</strong> Kernel arbitrary
+p_comm walk: skipped (discovery failed: kernel.addr.allproc non risolto)</p>
+<p>=== TEST2 PASS (discovery parziale): kernel arbitrary read AND write dimostrato ===</p>
+<pre><code>
+**The gate draws a line between two results that were previously conflated.** Kernel arbitrary
 read/write, which is the objective, is reachable on 14.00 if the double-free holds, and touches no
 per-firmware table field at all. A complete jailbreak, meaning privilege escalation, sandbox
 escape, debug menu and DEX target id, is blocked until a 14.00 entry is added to the offset table,
-because every one of those patches hangs off <code>DATA_BASE_SECURITY_FLAGS</code> and its derivatives. A
-positive on 14.00 therefore arrives as <code>TEST2 PASS (discovery parziale)</code> rather than as a full
-jailbreak, and the message <code>fw not yet supported for jailbreaking</code> in the output is not a failure
+because every one of those patches hangs off `DATA_BASE_SECURITY_FLAGS` and its derivatives. A
+positive on 14.00 therefore arrives as `TEST2 PASS (discovery parziale)` rather than as a full
+jailbreak, and the message `fw not yet supported for jailbreaking` in the output is not a failure
 of the objective: it has to be read alongside the round-trip. Getting the full jailbreak needs the
-value of <code>DATA_BASE_ALLPROC</code> for 14.00, a structural offset determinable from the decrypted PUP,
-and that decryption remains blocked on the L1 key in Titania.</p>
-<h3 id="152-the-other-exploit-does-not-touch-the-table-at-all">15.2 The other exploit does not touch the table at all</h3>
-<p>Comparing the two payload files on one specific question, how much each depends on the per-firmware
-offset table, produces an asymmetry that changes what each route can deliver.</p>
-<table>
-<thead>
-<tr>
-<th></th>
-<th>Plan A <code>lapse.lua</code></th>
-<th>Plan B <code>p2jb_handoff.lua</code></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Version gate</td>
-<td>none</td>
-<td>lifted (<code>&gt; 99</code> at <code>:1285</code>)</td>
-</tr>
-<tr>
-<td><code>DATA_BASE_ALLPROC</code> gate</td>
-<td><strong>fires on 14.00</strong> (<code>:1793</code>)</td>
-<td><strong>none</strong></td>
-</tr>
-<tr>
-<td><code>DATA_BASE_*</code> dependencies</td>
-<td>many: allproc, base, dmap, security flags, rootvnode</td>
-<td><strong>zero</strong></td>
-</tr>
-<tr>
-<td>Fields read from <code>kernel_offset</code></td>
-<td>20 or more</td>
-<td><strong>one</strong>: <code>PROC_COMM</code> at <code>:1247</code></td>
-</tr>
-<tr>
-<td><code>allproc</code> resolution</td>
-<td>validated through <code>DATA_BASE_ALLPROC</code></td>
-<td>pure <code>KDATA_MASK</code> walk</td>
-</tr>
-<tr>
-<td><code>PROC_COMM</code> / <code>PROC_SYSENT</code></td>
-<td>from the table, <code>-1</code> and unresolved on 14.00</td>
-<td>runtime pattern discovery</td>
-</tr>
-<tr>
-<td>Privilege escalation</td>
-<td>skipped, past the gate</td>
-<td>performed at <code>:1243</code></td>
-</tr>
-<tr>
-<td><code>qa_flags</code> patch</td>
-<td>skipped</td>
-<td>via kexp at <code>:1251</code></td>
-</tr>
-</tbody>
-</table>
-<p>Plan B's single table field is overwritten at runtime before use:</p>
-<pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
+value of `DATA_BASE_ALLPROC` for 14.00, a structural offset determinable from the decrypted PUP,
+and that decryption remains blocked on the L1 key in Titania.
+
+### 15.2 The other exploit does not touch the table at all
+
+Comparing the two payload files on one specific question, how much each depends on the per-firmware
+offset table, produces an asymmetry that changes what each route can deliver.
+
+| | Plan A `lapse.lua` | Plan B `p2jb_handoff.lua` |
+|---|---|---|
+| Version gate | none | lifted (`&gt; 99` at `:1285`) |
+| `DATA_BASE_ALLPROC` gate | **fires on 14.00** (`:1793`) | **none** |
+| `DATA_BASE_*` dependencies | many: allproc, base, dmap, security flags, rootvnode | **zero** |
+| Fields read from `kernel_offset` | 20 or more | **one**: `PROC_COMM` at `:1247` |
+| `allproc` resolution | validated through `DATA_BASE_ALLPROC` | pure `KDATA_MASK` walk |
+| `PROC_COMM` / `PROC_SYSENT` | from the table, `-1` and unresolved on 14.00 | runtime pattern discovery |
+| Privilege escalation | skipped, past the gate | performed at `:1243` |
+| `qa_flags` patch | skipped | via kexp at `:1251` |
+
+Plan B's single table field is overwritten at runtime before use:
+
+```lua
+-- p2jb_handoff.lua:1240-1251
 kernel.addr.allproc = find_allproc()          -- runtime, no table
 
 escalate_curproc()                            -- real privilege escalation
