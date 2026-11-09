@@ -1973,6 +1973,24 @@ structured clone, so the channel has never been exercised. It is worth trying be
 clone has to survive session navigation and therefore goes through its own serialization path rather
 than the one the three tested channels use. If that path serializes into a byte buffer, the layout to
 spray differs, and the landing-on-floats result may not repeat in the same shape.</p>
+<p><strong>The history vector was then executed in a real browser engine and has the same corrected shape as the
+object spray.</strong> Running the probe's core logic in Chromium through <code>browser_run_code_unsafe</code>:</p>
+<pre><code class="language-json">{&quot;getter_fired&quot;: true, &quot;getter_count&quot;: 1, &quot;clone_readable&quot;: true,
+ &quot;clone_shape&quot;: &quot;[object Object]&quot;, &quot;state_has_trigger&quot;: true,
+ &quot;trigger_val&quot;: 1094861636, &quot;sharing_preserved&quot;: true,
+ &quot;a_type&quot;: &quot;object&quot;, &quot;a_is_object&quot;: true}
+</code></pre>
+<p><strong><code>trigger_val</code> is <code>0x41424344</code>, the marker tag, so the history serialization carries the data and
+round-trips it.</strong> <strong><code>a_type: "object"</code> is the type-level confirmation that the history clone holds
+objects, not the <code>0x4058..</code> floats the original SSV landed on.</strong> The getter fires exactly once during
+<code>replaceState</code>, the clone is readable, and sharing is preserved (<code>a === b</code> after the clone). <strong>The
+vector has the right shape to be sprayed with objects.</strong></p>
+<p><strong>What it does not resolve: the probe reads the marker's tag through JS (<code>st.trigger.tag</code>), not the raw
+bytes of the serialized buffer.</strong> The round-trip of <code>0x41424344</code> is the tag, not a pointer; the history
+serializes the value, it does not expose a byte-addressable view on the buffer. <strong>Two independent
+vectors, the SSV clone and the history, converge on the same corrected shape and the same missing
+stretch: the byte-addressable read via UAF. That convergence is itself a signal that the bottleneck is
+not the vector but the read.</strong></p>
 <p>A probe for it is written and dry-run against a mock that wraps V8's native <code>structuredClone</code>:</p>
 <pre><code class="language-json">{
   &quot;getter_fired&quot;: true, &quot;getter_depth&quot;: 1,
