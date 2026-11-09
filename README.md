@@ -1,8 +1,9 @@
 # PS5 firmware 14.00: jailbreak research
 
-**Open research toward a jailbreak of PlayStation 5 firmware 14.00, reached entirely through the
-system User's Guide browser.** No game installed, no loader, no USB: arbitrary JavaScript in
-the guide's WebProcess and a live console.
+**Open research toward a jailbreak of PlayStation 5 firmware 14.00.** Two entries were studied.
+The browser entry needs nothing but the guide's WebProcess and a live console: no game, no loader,
+no USB. The route that reaches kernel read/write is a different one: a trojanized save game that
+does not run through the browser at all.
 
 **Status: not jailbroken.** The userland chain works and is measured. The kernel side is
 characterised but not exploited. What is here is the honest state of both, with the raw output
@@ -67,6 +68,42 @@ Three independent probes say it: float setters survive an address-shaped write, 
 spray reads back as ≈98.8 rather than as pointers, and a reversed reclaim returns 720 of 720
 float-like words with zero object headers under the alias. **The canvas UAF is not a route to
 the leak. It needs a different class of bug, not a better offset.**
+
+---
+
+## The route to the goal: a foothold that does not run through the browser
+
+**The browser path is blocked by the two gaps above. The work did not stop there: it pivoted to a
+foothold that bypasses the browser entirely.**
+
+**A trojanized save game in a Visual Novel engine (Artemis, shipped as Raspberry Cube, CUSA16074)
+loads arbitrary Lua inside the game process. The foothold carries no firmware offset: it is a bug in
+the engine, not in the system software, so it does not age with the firmware the way the browser
+chain does.**
+
+**From the foothold the chain is:**
+
+- **a JIT shared-memory mapping for executable memory (`jitshm_create` plus `mmap` under `PROT_RWX`),**
+- **a native ELF loader that maps the payload and resolves symbols through `dlsym`,**
+- **the kernel read/write built on an out-of-band `IPV6_PKTINFO` socket option: two sockets, a
+  redirect that points one socket's option buffer at an arbitrary kernel address, and a pipe pair that
+  turns the redirect into copy-in and copy-out,**
+- **the jailbreak itself in a native payload that initialises the IOMMU and patches the QA flags with
+  a magic value.**
+
+**Every offset the chain needs is either a platform constant that has not moved across the firmware
+range or is discovered at runtime by walking the process list, so the chain never asks the firmware
+table for a value the table does not already carry.**
+
+**What remains is not a gap in the reasoning but a fact only the device can give: whether the
+out-of-band read/write holds on 14.00, and whether the QA-flag layout the native payload patches has
+changed since the offsets were hardcoded. The payload prints its own before-and-after readback of
+those flags, so the answer is visible the moment the foothold runs, and each native step names its own
+failure.**
+
+**The browser path ends at a missing leak. The save path ends at a device check.**
+
+---
 
 ## Kernel-side: the 14.00 artifact is in hand, the kernel image is not
 
