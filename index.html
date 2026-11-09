@@ -2728,6 +2728,22 @@ the probe origin. On the PS5 the page is served from the real origin so it works
 depends on the URL of the page hosting it. <strong>A fix that breaks another thing is worse than not doing
 it, because the new symptom does not resemble the original problem: a double <code>pg_end</code> becomes
 <code>undefined is not an object</code> and the search goes somewhere else.</strong></p>
+<p><strong>The same silent drift was then audited across the whole live plan rather than assumed fixed on one
+module.</strong> The plan carries code inline rather than a reference, which is deliberate, since it makes the
+plan self-serving and allows shipping a variant without touching the library, but it also lets the two
+copies drift with neither one saying which is current:</p>
+<pre><code>plan_id 2644 - library 169 entries
+  byteview-stability      6122 B  identical to library (stable-byteview-1400)
+  history-addrof          5969 B  identical to library (CVE-2026-43720-history-addrof)
+  blocked-thread          3391 B  identical to library (CVE-2026-43720-blocked-thread)
+  ssv-object              4702 B  identical to library (CVE-2026-43720-ssv-object-spray)
+divergent: 0 / 4
+</code></pre>
+<p><strong>All four live tests match their library copies byte for byte; the divergence fixed in the previous
+round was the only one that existed.</strong> <strong>What this closes as a cause: if a probe misbehaves on 14.00 it
+is not because the plan is serving a different version than the one corrected and verified.</strong> The audit
+is reusable and flags the specific pattern, <code>LIBRARY WITHOUT THENABLE: post().then() breaks</code>, and should
+run after every probe registration, since drift is created by updating one copy and not the other.</p>
 <p><strong>What this excludes beforehand: if the agent fails to start on 14.00, the cause is not the loop
 logic, because the loop has been executed end to end in a real browser.</strong> What remains device-only is
 by definition what Chromium does not reproduce, the Capsicum worker <code>SecurityError</code> and the
