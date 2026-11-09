@@ -430,6 +430,18 @@ from ordinary DOM calls, with no JIT and no WebAssembly required.</p>
 something we control, but its absolute location in memory is unknown, and the value channel is
 float64, which is where §10 comes in. <strong>This is the single thing standing between a working
 userland primitive and a usable one, and it is the same wall upstream reports.</strong></p>
+<p><strong>The mechanism behind the float64 channel is concrete.</strong> The read is <code>inner.getTransform()</code> and the
+write is <code>inner.setTransform(WA..WF)</code>, both through the dangling context created inside the
+<code>desynchronized</code> getter. <strong>The data crossing the window is the DOMMatrix transform, six doubles by
+definition, so the channel is float64 not because of a choice in the probe but because the calls that
+carry the primitive are transform calls.</strong> The probe confirms the read with <code>chan = close(m.a, SA) &amp;&amp;
+... &amp;&amp; close(m.f, SF)</code> against the sprayed transform, and the write by re-reading after
+<code>setTransform</code>.</p>
+<p><strong>So <code>bidirectional: true</code> means both <code>getTransform</code> and <code>setTransform</code> operate through the UAF
+alias.</strong> It does not mean the byte-addressable butterfly view the objective needs. The primitive reads
+and writes the transform block, six floats, not a single byte at a chosen offset, and it does not
+expose a pointer. <strong>It is a building block that proves the aliasing exists and carries both directions;
+the step to the butterfly is a different problem and stays open.</strong></p>
 <p>Memory was bounded deliberately: 1×1 canvases, a spray of 80, under the ~100 MB ceiling that
 killed an earlier plan.</p>
 <h2 id="4-the-ntfusion-iterator-confusion-new">4. The <code>ntfusion</code> iterator confusion <code>[new]</code></h2>
