@@ -166,6 +166,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 </li>
 <li><a href="#15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser [new]</a><ul>
 <li><a href="#151-a-second-gate-indexed-by-firmware-table-rather-than-by-version-number">15.1 A second gate, indexed by firmware table rather than by version number</a></li>
+<li><a href="#152-the-other-exploit-does-not-touch-the-table-at-all">15.2 The other exploit does not touch the table at all</a></li>
 </ul>
 </li>
 <li><a href="#16-conclusion-new">16. Conclusion [new]</a></li>
@@ -3521,6 +3522,107 @@ jailbreak, and the message <code>fw not yet supported for jailbreaking</code> in
 of the objective: it has to be read alongside the round-trip. Getting the full jailbreak needs the
 value of <code>DATA_BASE_ALLPROC</code> for 14.00, a structural offset determinable from the decrypted PUP,
 and that decryption remains blocked on the L1 key in Titania.</p>
+<h3 id="152-the-other-exploit-does-not-touch-the-table-at-all">15.2 The other exploit does not touch the table at all</h3>
+<p>Comparing the two payload files on one specific question, how much each depends on the per-firmware
+offset table, produces an asymmetry that changes what each route can deliver.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Plan A <code>lapse.lua</code></th>
+<th>Plan B <code>p2jb_handoff.lua</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Version gate</td>
+<td>none</td>
+<td>lifted (<code>&gt; 99</code> at <code>:1285</code>)</td>
+</tr>
+<tr>
+<td><code>DATA_BASE_ALLPROC</code> gate</td>
+<td><strong>fires on 14.00</strong> (<code>:1793</code>)</td>
+<td><strong>none</strong></td>
+</tr>
+<tr>
+<td><code>DATA_BASE_*</code> dependencies</td>
+<td>many: allproc, base, dmap, security flags, rootvnode</td>
+<td><strong>zero</strong></td>
+</tr>
+<tr>
+<td>Fields read from <code>kernel_offset</code></td>
+<td>20 or more</td>
+<td><strong>one</strong>: <code>PROC_COMM</code> at <code>:1247</code></td>
+</tr>
+<tr>
+<td><code>allproc</code> resolution</td>
+<td>validated through <code>DATA_BASE_ALLPROC</code></td>
+<td>pure <code>KDATA_MASK</code> walk</td>
+</tr>
+<tr>
+<td><code>PROC_COMM</code> / <code>PROC_SYSENT</code></td>
+<td>from the table, <code>-1</code> and unresolved on 14.00</td>
+<td>runtime pattern discovery</td>
+</tr>
+<tr>
+<td>Privilege escalation</td>
+<td>skipped, past the gate</td>
+<td>performed at <code>:1243</code></td>
+</tr>
+<tr>
+<td><code>qa_flags</code> patch</td>
+<td>skipped</td>
+<td>via kexp at <code>:1251</code></td>
+</tr>
+</tbody>
+</table>
+<p>Plan B's single table field is overwritten at runtime before use:</p>
+<pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
+kernel.addr.allproc = find_allproc()          -- runtime, no table
+
+escalate_curproc()                            -- real privilege escalation
+
+-- needed for swapping sysent
+local proc_offsets = find_proc_offsets()      -- runtime discovery
+kernel_offset.PROC_COMM   = proc_offsets.PROC_COMM
+kernel_offset.PROC_SYSENT = proc_offsets.PROC_SYSENT
+
+run_with_ps5_syscall_enabled(spawn_payload)   -- kexp patches qa_flags
+</code></pre>
+<p>The two <code>find_allproc</code> implementations make the difference concrete. Plan A uses the table field as a
+validity check on the mask match (<code>lapse.lua:1807-1823</code>):</p>
+<pre><code class="language-lua">if bit64.band(proc, KDATA_MASK) == KDATA_MASK then
+    local data_base = proc - kernel_offset.DATA_BASE_ALLPROC   -- table
+    if bit32.band(data_base.l, 0xfff) == 0 then
+        return proc
+    end
+end
+</code></pre>
+<p>Plan B uses the mask alone (<code>p2jb_handoff.lua:1092</code>), and the mask is a property of the kernel
+address range rather than a per-firmware offset, which is why no table entry is needed:</p>
+<pre><code class="language-lua">while bit64.band(proc, KDATA_MASK) ~= KDATA_MASK do
+    proc = kernel.read_qword(proc + 0x8)
+end
+</code></pre>
+<p><code>find_proc_offsets</code>, defined in the loader at <code>koffset.lua:480</code>, is likewise pure pattern discovery.
+It reads 0x1000 bytes from <code>curproc</code> and recovers both offsets from known byte signatures,
+<code>"ce fa ef be cc bb"</code> for <code>p_comm</code> and <code>"ff ff ff ff ff ff ff 7f"</code> for <code>p_sysent</code>, with no
+reference to the firmware version anywhere in the function.</p>
+<p><strong>The consequence is that on 14.00 the two routes are not interchangeable, which is how they had
+been treated up to this comparison.</strong> Plan A reaches the kernel read/write objective but loses
+everything below its gate, so it cannot produce a complete jailbreak on a firmware the table does not
+cover. <strong>Plan B is the only one of the two that can deliver a full jailbreak on 14.00, because it is
+the only one that never meets the gate.</strong> Its residual risk is unchanged and sits where it always
+sat: the IOMMU vulnerability has to still be live, and that is the bug rather than the code, with the
+diagnostics already named.</p>
+<p><strong>One defect found while comparing and fixed.</strong> Plan B's <code>find_allproc</code> loop had no iteration bound,
+where plan A's has <code>max_attempt = 32</code> and exits with a clean error. An off-track proc-list walk in
+plan B would spin forever, surfacing only as a runner timeout with no evidence about why. A bound of
+64 attempts now converts that hang into a named failure. All three payload files parse as Lua 5.1 and
+the runner simulation passes 5 of 5 scenarios against the modified files.</p>
+<p><strong>Execution order is unchanged, plan A then plan B, with the expectation corrected.</strong> If plan A
+returns the round-trip and nothing more, that is the expected behaviour rather than a failure. If a
+complete jailbreak is wanted on 14.00, the route is plan B.</p>
 <hr />
 <h2 id="16-conclusion-new">16. Conclusion <code>[new]</code></h2>
 <p>Two things were established and one was corrected.</p>
