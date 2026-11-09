@@ -3781,9 +3781,25 @@ because <code>kernel.addr.allproc</code> is nil past the <code>DATA_BASE_ALLPROC
 the gate survivors <code>curproc</code> and <code>inside_kdata</code>, set in <code>make_kernel_arw</code> with static offsets, and those
 hold.</strong> <strong>The test prints <code>TEST2 PASS (discovery parziale): kernel arbitrary read AND write dimostrato</code>,
 carrying the note that the goal is proved by the canary round trip and not by the walk: the structural
-discovery failed but the ipv6 primitive with its hardcoded offsets held.</strong> <strong>The runner's
+discovery failed but the ipv6 primitive with its hardcoded offsets held.</strong> **The runner's
 <code>PASS_RE = "TEST2 PASS"</code> matches both the full and the partial form, so the goal is detected correctly in
-the case 14.00 actually produces.</strong></p>
+the case 14.00 actually produces.</p>
+<p><strong>The candidate list itself is built so that 14.00 cannot produce a false negative from an empty list.</strong>
+<strong><code>add_cand</code> (<code>test2_kernel_rw.lua:95-99</code>) carries the guard <code>if base then ... insert(candidates, ...)
+end</code>, so a nil base is never added.</strong> <strong>On 14.00 <code>data_base</code> and <code>dmap_base</code> are nil, so the
+<code>data_base+0x*</code> and <code>dmap_base+0x*</code> candidates (<code>:208-212</code>) are skipped, and the list is filled instead
+by the gate survivors: <code>curproc+p_comm</code> (<code>:186</code>), <code>curproc+PROC_PID</code> (<code>:201</code>), <code>curproc_fd+0x100</code>
+(<code>:202</code>) and <code>curproc_ofiles+0x100</code> (<code>:203</code>), all derived from the <code>curproc</code> group set in
+<code>make_kernel_arw</code> with static offsets.</strong> <strong>The nil-check is what turns the missing <code>data_base</code> from a
+false negative into a non-event.</strong></p>
+<p><strong>The read proof and the write proof are deliberately separated by risk.</strong> <strong>The read proof is zero-risk:
+<code>inside_kdata</code> (<code>:112-117</code>) is <code>evf.cv.cv_description</code>, the constant string <code>"evf cv"</code>, and reading it
+back proves arbitrary read without writing anything.</strong> <strong>The write proof is the canary round trip, and its
+primary target is <code>curproc+PROC_PID</code> rather than <code>curproc+p_comm</code>, because <code>PROC_PID</code> is an
+independently verified offset: the real PID is read first, the canary written, read back, and the PID
+restored, so the round trip is verifiable twice on a target whose offset is known and whose value is
+restorable.</strong> <strong>The write width is eight bytes exactly: <code>write_qword</code> to <code>write_buffer</code> to <code>copyin</code> to
+<code>syscall.write(..., len=8)</code>, not the twenty bytes an earlier draft claimed.</strong>**</p>
 <p><strong>A false alarm was cleared on the way.</strong> A first grep, filtered too tightly over a file with many prints,
 suggested the test never printed <code>TEST2 PASS</code> and only printed <code>round-trip OK</code>, which would have meant a
 marker mismatch: the runner would log the round trip as proved yet return false, throwing the goal away.
