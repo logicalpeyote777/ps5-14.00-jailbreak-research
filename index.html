@@ -3797,6 +3797,13 @@ layout changed, those hardcoded offsets land on the wrong fields, and the patch 
 nothing.</strong> <strong>This is the natural successor to the <code>DATA_BASE_ALLPROC</code> gate: that gate stops plan A's
 post-exploit in Lua; a changed qa_flags layout would stop plan B's jailbreak at the native layer, each with
 its own named error.</strong></p>
+<p><strong>How the base itself is found was read from the patch function's prologue (<code>0xf20</code>), and it is not a
+firmware-table value.</strong> <strong>An <code>mmap</code> of <code>0x4000</code> bytes is allocated and stored to a global, a syscall returns
+a value that lands in <code>ebx</code>, and a kernel read from <code>ebx</code> produces the qa_flags base in <code>r15</code>.</strong> <strong>No step
+consults a firmware table for the base, so the base discovery is robust and firmware-independent.</strong> <strong>This
+narrows the qa_flags risk to a single question rather than two: the base is found correctly at runtime on any
+firmware, and only the hardcoded offsets inside it can be wrong. The device-specific unknown is whether the
+qa_flags layout is unchanged, not whether the base can be located.</strong></p>
 <p><strong>That control channel was checked on both ends, because a length encoding that does not match byte for
 byte is a silent failure: the connection succeeds and the execution is wrong.</strong> The sender at
 <code>send_lua.py:56</code>:</p>
