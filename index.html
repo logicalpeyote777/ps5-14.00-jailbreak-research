@@ -2027,6 +2027,42 @@ so for 14.00 there is no expected value to compare against.</p>
 </tr>
 </tbody>
 </table>
+<p><strong>The worker prerequisite has a vehicle already in hand, and it is not a worker.</strong> Every probe module
+closes with a synchronous XHR, chosen originally for a different reason:</p>
+<pre><code class="language-js">/* XHR sincrona: il beacon lascia il renderer prima di un crash nella
+   stessa chiamata. Con fetch asincrono il dato e' in coda quando la
+   pagina muore e si perde. */
+var x = new XMLHttpRequest();
+x.open('POST', '/log', false);     // false = sincrona
+</code></pre>
+<p><strong>The <code>false</code> blocks the WebProcess main thread inside a network syscall until the response arrives.</strong>
+That is a thread blocked in the kernel, which is the shape the ROP needs, obtained without creating a
+worker and without touching Capsicum. The agent itself uses <code>async fetch</code> with <code>keepalive</code> and blocks
+nothing; the primitive lives in the modules, not in the agent.</p>
+<p><strong>What makes it worth more than a blocked thread is that the bytes written during the block come from
+the server.</strong> Allocate the XHR response buffer, locate it through the UAF, redirect its pointer, then
+issue the sync XHR and let the kernel write server-chosen bytes at the target. The <code>what</code> is under
+full control because the response is ours, at a length we pick. Finding a <code>pop_rsp</code> gadget inside an
+execute-only binary is hard; controlling 4096 bytes of HTTP response is trivial. <strong>This moves part of
+the problem from the client side, where control is scarce, to the server side, where it is total.</strong></p>
+<p><strong>The enabler is built and measured rather than proposed.</strong> The probe server now delays a response on
+command, with the delay read from the query string so no plan change or restart is needed per
+measurement:</p>
+<pre><code>--- senza delay ---
+tempo reale = 0.007602s
+--- con delay=3 ---
+{&quot;ok&quot;: true, &quot;delayed_s&quot;: 3.0}
+tempo reale = 3.006896s
+</code></pre>
+<p><strong>The blocked-thread test is therefore one non-lethal run: a sync XHR to <code>/log?delay=5</code> with a
+timestamp before and after.</strong> Whether the server holds the delay is already known without the device;
+only whether the client stops inside it needs the console.</p>
+<p><strong>Two limits stated plainly.</strong> It does not resolve the addrof, which is still the bottleneck, since
+the buffer must be located and the target pointer must be known. And the write lands in the
+WebProcess address space, not kernel memory, so it is a userspace write-what-where with
+server-controlled content. Reaching the kernel needs that write to hit a syscall structure the kernel
+dereferences, or a chain on the blocked thread issuing a syscall with arbitrary arguments. <strong>The piece
+exists; the final connection is still open.</strong></p>
 <p><strong>Induction declared where it applies.</strong> <code>5c c3</code> absent in 12.xx is <strong>measured</strong>. Absent in
 14.00 is <strong>induced by family</strong>, since no 14.00 <code>libkernel_web</code> binary is in our possession
 (§9.3). The two are stated separately rather than merged into one claim.</p>
