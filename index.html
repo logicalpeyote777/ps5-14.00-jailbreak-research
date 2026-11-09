@@ -4870,6 +4870,18 @@ kernel_offset.PROC_SYSENT = proc_offsets.PROC_SYSENT
 
 run_with_ps5_syscall_enabled(spawn_payload)   -- kexp patches qa_flags
 </code></pre>
+<p><strong>The last line is the final jailbreak step, and the wrapper does a syscall-table swap.</strong> <strong>The game runs
+in PS4-compatibility mode with a PS4 <code>sysent</code> table, which does not expose the PS5 syscalls the kexp
+needs to patch <code>qa_flags</code>.</strong> <strong><code>run_with_ps5_syscall_enabled</code> (<code>kernel.lua:436</code>) borrows the PS5 table
+from a PS5-native process: it finds <code>SceGameLiveStreaming</code> (declared "arbitrarily chosen", any
+PS5-native process with the full PS5 table would do), reads both <code>sysentvec</code> structures, and writes the
+target's <code>sv_size</code> and <code>sv_table</code> over the current process's (<code>:457-458</code>).</strong> <strong>With the PS5 table now
+installed in the game process, the payload runs, and the original <code>sysent</code> is restored afterward inside
+the same <code>run_with_coroutine</code> catch.</strong> <strong>The swap is therefore temporary: the game holds the PS5 table
+only for the duration of the kexp, then returns to its PS4 table, and a payload error still triggers the
+restore so the game is not left with an inconsistent table.</strong> <strong>The residual risk is whether
+<code>SceGameLiveStreaming</code> is present on 14.00 with a compatible table; if it is not, <code>find_proc_by_name</code>
+fails with the named error <code>failed to find proc addr of SceGameLiveStreaming</code>.</strong></p>
 <p>The two <code>find_allproc</code> implementations make the difference concrete. Plan A uses the table field as a
 validity check on the mask match (<code>lapse.lua:1807-1823</code>):</p>
 <pre><code class="language-lua">if bit64.band(proc, KDATA_MASK) == KDATA_MASK then
