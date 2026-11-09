@@ -3992,6 +3992,19 @@ confusion.</strong></p>
 pipe-plus-pipemap tricks on top of <code>ipv6_kwrite</code>, with no page walk, no <code>PMAP_STORE_*</code> and no
 <code>DATA_BASE_*</code> in the path. <strong>The only consumer of <code>DATA_BASE_*</code> outside the table is <code>gpu.lua</code>,
 which is GPU-only.</strong></p>
+<p><strong>The third level of the dependency chain is the syscall layer, and it is resolved too.</strong> <strong>The
+<code>syscall</code> module is a global table (<code>syscall.lua:8</code>) whose functions are built at runtime by
+<code>syscall.resolve(list)</code> (<code>syscall.lua:67</code>), which turns each <code>(name, number)</code> pair into
+<code>syscall[name] = fcall(syscall_address, num)</code>.</strong> <strong>The resolve list at <code>main.lua:275-298</code> carries every
+syscall the primitive needs: <code>read=0x3</code>, <code>write=0x4</code>, <code>pipe=0x2a</code>, <code>socket=0x61</code>, <code>setsockopt=0x69</code>,
+<code>getsockopt=0x76</code>, the standard FreeBSD/ORBIS numbers shared by PS4 and PS5.</strong> <strong>The comment at
+<code>main.lua:274</code> states the contract: "syscall resolved here will also be available in the payloads", so
+the loader resolves them once and <code>lapse.lua</code> and <code>p2jb_handoff.lua</code> use them.</strong> <strong>A useful trap to
+name: <code>getsockopt</code> is not a literal function in <code>syscall.lua</code>; searching the module for the string finds
+nothing, because the function is created at runtime from the number <code>0x76</code>.</strong> <strong>The right place to check
+is the resolve list, not the module body.</strong> <strong>With the syscalls resolved (level one), the offsets present
+(level two) and the technique read in the code (level three), the primitive has every piece it needs to
+run on 14.00; the only thing left is whether the out-of-band read and write hold on the device.</strong></p>
 <p><strong>The initialisation order settles the dependency question outright.</strong> In <code>initialize_kernel_rw</code>
 (<code>kernel.lua:327-348</code>):</p>
 <pre><code class="language-lua">kernel.copyout      = ipv6_kernel_rw.copyout      -- wired BEFORE
