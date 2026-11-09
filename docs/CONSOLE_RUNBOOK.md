@@ -128,6 +128,19 @@ after the test.** The documented panic (issue #133) is at game CLOSE, not during
 | `TEST2 FAIL: exploit state 'kernel_rw' assente` | the payload exploit did not run |
 | `unable to find softc !!` / `unable to init iommu !!` / `unable to patch qa flags !!` | the IOMMU vuln is patched. Closes plan B with a named reason |
 
+**A Lua error in the exploit is caught, shown, and cleaned up, so a failed attempt does not leave the
+game holding dangling resources.** The exploit body runs inside `run_with_coroutine`
+(`misc.lua:88-95`), which resumes the coroutine and on error returns the message plus a traceback
+instead of letting it propagate. `lapse.lua:2052` prints that error (it reaches us over the socket,
+because `print` is rewritten to write to the client fd), and then the cleanup at `lapse.lua:2056` runs
+regardless of the error: it closes `block_fd` and `unblock_fd`, frees the groom AIOs, deletes the block
+AIO, and closes the socket descriptors. `main.lua:85-90` also writes the error to the client fd.
+**So a failed exploit on 14.00 gives a visible traceback and still releases the AIO and fd resources,
+which matters under the do-not-brick constraint: a failed attempt is not supposed to be the thing that
+crashes the game.** The residual risk is the partial-success case, where the double free already
+happened and the cleanup touches memory the exploit already corrupted; that is inherent to the
+technique, not to the error handling.
+
 **Step 0 runs first and must show `kernel_rw_initialized` false.** If it reads true, something
 already fired and the baseline is not clean, so a PASS cannot be credited to the current run.
 
