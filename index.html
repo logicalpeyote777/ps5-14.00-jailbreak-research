@@ -5203,6 +5203,22 @@ we do not have (§12.1). The device results therefore stand on their own while t
 characterisation remains a hypothesis. With a code leak in hand the 14.00 kernel can be
 <strong>fuzzed live from the browser</strong> (§13.7), routing around the missing image entirely: a
 proposal, not a result.</p>
+<p><strong>A third thing came out of the engagement, and it is the route to the goal.</strong> <strong>The browser path is
+blocked by the two gaps above, but the work did not stop there: it pivoted to a foothold that does not run
+through the browser at all (§15).</strong> <strong>A trojanized save game in a Visual Novel engine (Artemis) loads
+arbitrary Lua inside the game process, and that foothold carries no firmware offset: it is a bug in the
+engine, not in the system software, so it does not age with the firmware the way the browser chain does.</strong>
+<strong>From the foothold the chain is a JIT shared-memory mapping for executable memory, a native ELF loader,
+and the kernel read/write built on an out-of-band <code>IPV6_PKTINFO</code> socket option, with the jailbreak itself
+in a native payload that initialises the IOMMU and patches the QA flags with a magic value.</strong> <strong>Every
+offset the chain needs is either a platform constant that has not moved across the firmware range or is
+discovered at runtime by walking the process list, so the chain never asks the firmware table for a value
+the table does not already carry.</strong> <strong>What remains is not a gap in the reasoning but a fact only the device
+can give: whether the out-of-band read/write holds on 14.00, and whether the QA-flag layout the native
+payload patches has changed since the offsets were hardcoded.</strong> <strong>The payload prints its own before-and-after
+readback of those flags, so the answer is visible the moment the foothold runs, and each native step names
+its own failure.</strong> <strong>This is the difference between the two halves of the engagement: the browser path ends
+at a missing leak, the save path ends at a device check.</strong></p>
 <p>The most useful product may be neither finding but the discipline behind them: run the gate
 against a known negative before trusting it on an unknown; treat a probe that never touched its
 subject as having said nothing; and when a null result shows up, check the offset before
