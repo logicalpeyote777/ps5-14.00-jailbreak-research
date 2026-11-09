@@ -1912,6 +1912,29 @@ tests: 2
   tier=history-addrof       code_len=4818
 </code></pre>
 <p><strong>The probe will actually fire on the next browser session.</strong></p>
+<p><strong>The harness reports a spurious error on success, and it reads like a failure.</strong> The capture path
+is verified live: <code>probe_log.jsonl</code>, 6099 lines over 2.1 MB, with <code>plan_done</code> for the completed
+plan and the <code>PlayStation; PlayStation 5/14.00</code> user agent. But the last <code>pg_end</code> from the existing
+module reads:</p>
+<pre><code class="language-json">{&quot;ev&quot;: &quot;pg_end&quot;, &quot;data&quot;: {&quot;module&quot;: &quot;stable-byteview-1400&quot;, &quot;outcome&quot;: &quot;error&quot;,
+  &quot;detail&quot;: {&quot;err&quot;: &quot;null&quot;, &quot;last&quot;: &quot;init&quot;}}}
+</code></pre>
+<p><strong><code>outcome: "error"</code> with <code>err: "null"</code> is not a failure.</strong> The thenable's <code>then</code> returns <code>this</code>, the
+chain continues into <code>.catch</code>, and the catch invokes its callback with <code>null</code> even when nothing went
+wrong, so the module's handler serialises <code>String(null)</code>. The new probe inherited the same defect,
+emitting two <code>pg_end</code> events in the mock, one with the real detail and one spurious. Guarding on
+<code>e === null || e === undefined</code> leaves exactly one <code>pg_end</code>, with <code>outcome: done</code>.</p>
+<p><strong>A second bug was mine, and it is the insidious form of idempotence.</strong> The script that copies the
+probe into the plan checked whether the entry already existed and skipped it. So when the library was
+updated from 4818 to 5285 bytes, the plan stayed at 4818: the correction never reached the console,
+and the readback still showed a perfectly valid entry. <strong>Idempotent does not mean skip if present.
+It means bring the state to where it should be without doing it twice.</strong> A skip that freezes an old
+version is worse than a duplicate, because the duplicate is visible and the freeze is not.</p>
+<pre><code>voce esistente aggiornata: code_len 4818 -&gt; 5285, plan_id 2638 -&gt; 2639
+plan_id: 2639 tests: 2
+  tier=byteview-stability   len=5761
+  tier=history-addrof       len=5285
+</code></pre>
 <h3 id="126-the-rop-prerequisite-list-collapses-from-four-to-two">12.6 The ROP prerequisite list collapses from four to two</h3>
 <p>Four items are commonly listed as prerequisites for the ROP stage. Two of them are not
 independent problems.</p>
