@@ -442,6 +442,49 @@ alias.</strong> It does not mean the byte-addressable butterfly view the objecti
 and writes the transform block, six floats, not a single byte at a chosen offset, and it does not
 expose a pointer. <strong>It is a building block that proves the aliasing exists and carries both directions;
 the step to the butterfly is a different problem and stays open.</strong></p>
+<p><strong>The reason is a type mismatch, not just a missing read.</strong> Checking the probe's reclaim against the
+objective's requirement:</p>
+<table>
+<thead>
+<tr>
+<th>property</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>canvas context reclaim (C++ object)</td>
+<td><strong>True</strong></td>
+</tr>
+<tr>
+<td>JSObject spray</td>
+<td><strong>False</strong></td>
+</tr>
+<tr>
+<td>reads transform (C++ field)</td>
+<td><strong>True</strong></td>
+</tr>
+<tr>
+<td>reads butterfly slot (JSObject)</td>
+<td><strong>False</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The UAF is a same-type reclaim of a canvas context. The getter on <code>desynchronized</code> frees the context
+and the 80 sprayed canvases take it back. The target is a <code>CanvasRenderingContext2D</code>, a C++ object. The
+read is <code>getTransform()</code>, which reads the transform field of the C++ struct.</strong> <strong>The butterfly is a
+JSObject structure, a block of slots following the JS object header. A canvas context is not a JSObject
+with a butterfly; it is a C++ object with C++ fields. Reading a canvas context's memory gives C++ fields,
+not butterfly slots.</strong> <strong>The UAF is on the wrong object type for the objective's target.</strong></p>
+<p><strong>The two pieces exist separately and do not connect.</strong> The object spray provides JSObjects with the
+right shape (<code>idx_type: "object"</code>, sharing preserved), but the object spray has no UAF over it. The
+CVE-2026-43720 UAF exists but is on canvas contexts, not on those JSObjects. <strong>What is missing is the
+meeting: a UAF whose target is a JSObject whose butterfly we can read as bytes.</strong> <strong>This is not just
+"the read is missing"; it is "the UAF we have is on the wrong object type for the read we need". The
+CVE-2026-43720, however alive and bidirectional, cannot give the butterfly because its target is a C++
+object. The correct question is now: which bug gives a UAF on a JSObject? Not "how do I read the
+transform as bytes". The transform is a C++ field; the butterfly is a JS construct. They are two
+different things.</strong></p>
 <p><strong>Checking the write paths across the CVE probes makes the gap concrete.</strong> The <code>-rw</code> probe, which is the
 bidirectional primitive probe, has only the <code>setTransform</code> write: six floats at a fixed location, no
 byte write at an offset. The <code>-leak</code> probe has a byte path but it is the <code>getImageData</code> to
