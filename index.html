@@ -4095,6 +4095,31 @@ offset table, produces an asymmetry that changes what each route can deliver.</p
 </tr>
 </tbody>
 </table>
+<p><strong>The zero in the table was checked at function level rather than trusted as an absence.</strong> A grep that
+returns zero can mean the work is done elsewhere, or that the work is not implemented at all. Reading
+<code>escalate_curproc</code> at <code>:1168</code> settles which:</p>
+<pre><code class="language-lua">local proc = kernel.addr.curproc
+local ucred = kernel.read_qword(proc + OFFSET_P_UCRED) -- p_ucred
+patch_ucred(ucred, authid)
+patch_dynlib_restriction(proc)
+escape_filesystem_sandbox(proc)
+</code></pre>
+<p><strong>Everything starts from <code>kernel.addr.curproc</code>, which is one of the gate survivors</strong>, set inside
+<code>make_kernel_arw</code> with static offsets before plan A's gate can fire. And <code>patch_ucred</code> writes every
+field relative to the <code>ucred</code> pointer: <code>cr_uid</code> at <code>+0x04</code>, <code>cr_ruid</code> at <code>+0x08</code>, <code>cr_svuid</code> at
+<code>+0x0C</code>, <code>cr_ngroups</code> at <code>+0x10</code>, <code>cr_rgid</code> at <code>+0x14</code>, then <code>cr_sceAuthID</code>, <code>cr_sceCaps[0..1]</code>
+and <code>cr_sceAttrs</code> at named offsets. <strong>No absolute kernel data address anywhere.</strong></p>
+<p><strong>The contrast with plan A is structural, not a matter of degree.</strong> Plan A loses <code>data_base</code>, <code>allproc</code>,
+<code>base</code>, <code>dmap_base</code> and <code>kernel_cr3</code> because they are set inside <code>get_additional_kernel_address()</code>,
+past the gate, and <code>apply_patches_to_kernel_data</code> hangs entirely off <code>DATA_BASE_SECURITY_FLAGS</code>.
+<strong>Plan B does not need to know where the kernel is; it needs the address of its own <code>ucred</code>, which it
+reads by starting from itself.</strong></p>
+<p><strong>The code also carries its own verification rather than hoping:</strong></p>
+<pre><code class="language-lua">printf(&quot;we root now? uid: before %d after %d&quot;, uid_before, uid_after)
+printf(&quot;we escaped now? in sandbox: before %d after %d&quot;, in_sandbox_before, in_sandbox_after)
+</code></pre>
+<p><strong><code>uid: before N after 0</code> and <code>in sandbox: before 1 after 0</code> is a measured before-and-after, not an
+assumption that the patch took.</strong></p>
 <p>Plan B's single table field is overwritten at runtime before use:</p>
 <pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
 kernel.addr.allproc = find_allproc()          -- runtime, no table
