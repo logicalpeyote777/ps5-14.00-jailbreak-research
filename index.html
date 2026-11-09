@@ -1892,6 +1892,26 @@ started. With the contract corrected, the mock run produces the full detail set,
 <code>clone_readable</code> true, <code>sharing_preserved</code> true, <code>double_98_hi</code> <code>0x4058b333</code>, <code>spray_landed</code> 16,
 <code>outcome</code> <code>done</code>, and the syntax is validated with <code>new Function</code> against the code as stored in the
 harness.</p>
+<p><strong>Registering in the library is not the same as scheduling the run, and the gap is silent.</strong> The
+agent does not read <code>pg_tests.json</code>. It polls <code>/plan</code>, and <code>probe_server.py</code> answers that by reading
+<code>plan.json</code>, whose entries carry the code inline rather than referencing the library by id:</p>
+<pre><code class="language-python">if path == &quot;/plan&quot;:
+    # The persistent agent polls this. Rewriting plan.json from the server
+    # side is what makes further experiments need no console interaction.
+    pf = os.path.join(self.root, &quot;plan.json&quot;)
+</code></pre>
+<pre><code class="language-json">{ &quot;code&quot;: &quot;function post(ev, d) { ... }&quot;, &quot;timeout_ms&quot;: 40000, &quot;tier&quot;: &quot;byteview-stability&quot; }
+</code></pre>
+<p><strong>So the library can hold 167 entries while the served plan holds one, and the new probe simply
+never runs, with no error raised anywhere.</strong> The probe was therefore copied from library into plan,
+with <code>plan_id</code> incremented because the agent polls and compares that id to notice a change.
+Verified against the running server rather than only against the file:</p>
+<pre><code>plan_id servito: 2638
+tests: 2
+  tier=byteview-stability   code_len=5761
+  tier=history-addrof       code_len=4818
+</code></pre>
+<p><strong>The probe will actually fire on the next browser session.</strong></p>
 <h3 id="126-the-rop-prerequisite-list-collapses-from-four-to-two">12.6 The ROP prerequisite list collapses from four to two</h3>
 <p>Four items are commonly listed as prerequisites for the ROP stage. Two of them are not
 independent problems.</p>
