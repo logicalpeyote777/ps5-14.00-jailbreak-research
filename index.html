@@ -442,6 +442,48 @@ alias.</strong> It does not mean the byte-addressable butterfly view the objecti
 and writes the transform block, six floats, not a single byte at a chosen offset, and it does not
 expose a pointer. <strong>It is a building block that proves the aliasing exists and carries both directions;
 the step to the butterfly is a different problem and stays open.</strong></p>
+<p><strong>Checking the write paths across the CVE probes makes the gap concrete.</strong> The <code>-rw</code> probe, which is the
+bidirectional primitive probe, has only the <code>setTransform</code> write: six floats at a fixed location, no
+byte write at an offset. The <code>-leak</code> probe has a byte path but it is the <code>getImageData</code> to
+<code>Uint8ClampedArray</code> read of the pixel buffer, not a write to the butterfly.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>CVE-2026-43720 write</th>
+<th>the redirect the objective needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>granularity</td>
+<td>6 floats (the whole transform)</td>
+<td>1 byte</td>
+</tr>
+<tr>
+<td>location</td>
+<td>fixed (the context transform)</td>
+<td>chosen offset <code>0x10+i</code></td>
+</tr>
+<tr>
+<td>domain</td>
+<td>float64</td>
+<td>byte</td>
+</tr>
+<tr>
+<td>vehicle</td>
+<td><code>setTransform</code></td>
+<td><code>candidate[0x10+i]=byte</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The CVE writes the transform: six floats, fixed location, float64 domain. The butterfly redirect
+writes one byte at a chosen offset. These are two different primitives, and the CVE is not the
+redirect.</strong> <strong>The <code>bidirectional: true</code> is real but operates in the float-transform domain; it cannot do
+the byte write at an offset that the addrof-to-redirect chain requires.</strong> Having the bidirectional
+primitive is not having the redirect primitive. <strong>The CVE does not resolve the bottleneck, it skirts it:
+the float r/w is a live brick on 14.00, the byte r/w on the butterfly is another brick, and the jump
+between them is not made by this primitive.</strong></p>
 <p>Memory was bounded deliberately: 1×1 canvases, a spray of 80, under the ~100 MB ceiling that
 killed an earlier plan.</p>
 <h2 id="4-the-ntfusion-iterator-confusion-new">4. The <code>ntfusion</code> iterator confusion <code>[new]</code></h2>
