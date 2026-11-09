@@ -3018,11 +3018,91 @@ newer PS5 exploit.** `p2jb.lua` with `ps5-kexp.bin` remains the fallback, but it
 handoff adapted, either by making it write the storage key or by consuming its read/write directly
 instead of going through `initialize_kernel_rw`.
 
+**The 12.70 ceiling has a literal source in the code, and it is a code gate rather than a verdict on
+the vulnerability.** Preparing the fallback surfaced this. `p2jb.lua` refuses firmware above 12.70
+outright:
+
+```lua
+if PLATFORM ~= "ps5" or tonumber(FW_VERSION) > 12.70 then
+    printf("this exploit only works on ps5 (fw <= 12.70) (current %s %s)", PLATFORM, FW_VERSION)
+    send_ps_notification(...)
+else
+    ...
+    p2jb()
+end
+```
+
+**`tonumber("14.00")` is 14, which is greater than 12.70, so `p2jb` does not start at all on
+14.00. It prints the message and exits.** **That line is the literal source of the "jailbreak proven
+only to PS5 12.70" in the track record.** **The track record does not say the vulnerability dies
+after 12.70. It says the code stops at 12.70.** Those are different claims, and only the second one
+is what the evidence supports. **Lifting the gate opens the attempt; it does not remove the risk,
+which stays where it was, on the IOMMU vulnerability.**
+
+**The fallback lifts the gate and adds the missing handoff.** Two changes to `p2jb.lua`, delivered as
+`p2jb_handoff.lua` (45 251 bytes, md5 `b12fad7946725f6776376dae52be85b2`, syntax validated
+against Lua 5.1). The version test becomes `tonumber(FW_VERSION) > 99`, and after
+`post_exploitation_ps5()` the handoff writes the state the loader reads:
+
+```lua
+storage.set("kernel_rw", {
+    ipv6_kernel_rw_data = ipv6_kernel_rw.data,
+    kernel_addr = kernel.addr
+})
+kernel.rw_initialized = true
+```
+
+**The state format is byte for byte the one `lapse.lua:2044-2045` writes**, confirmed by direct
+comparison of the two blocks. The handoff is placed after `kernel.addr` is populated, because
+`storage.set` serialises immediately.
+
+**A trap in the loader's read path drove that design, and it is the interesting part.** **Storage
+carries data, not functions.** When the loader reads the state it reinstalls its own `read_buffer`
+and `write_buffer`, and those call the loader's `copyout`, which depends on `data.pipemap_buffer`.
+**But `p2jb` never populates `ipv6_kernel_rw.data`; it uses its own pipes, `master_wfd` and
+`victim_rfd` under the `set_victim_pipe` protocol.** In simulation, `ipv6_kernel_rw.data.pipemap_buffer`
+comes back `nil`. **So writing the storage key while leaving `rw_initialized = false` would have the
+loader overwrite p2jb's working primitive with its own broken route. The naive handoff makes things
+worse rather than better.** **The fix is `rw_initialized = true`, because `main.lua:250` reads
+`if not kernel.rw_initialized then initialize_kernel_rw() end`.** With the flag already true the
+loader skips the restore, and p2jb's helpers stay live. **`read_qword` at `kernel.lua:29` routes
+through `read_buffer`, so reads go straight to p2jb's helpers without touching `copyout`, and the
+goal never needs `copyout` or `copyin`.**
+
+**Verified end to end in a Lua VM before touching the console.** Running the handoff, then the
+loader's init path, then the test, with p2jb's primitive active:
+
+```
+[loader] rw_initialized=true -> SKIPPED, primitive p2jb preserved
+[loader] kernel.read_buffer still active?  true
+[canary] readback canary = 0x4142434445464748  -> WRITE proved
+[canary] restore verified
+round-trip OK (read+write proved) @ data_base+0x1000
+=== TEST2 PASS (partial discovery) ===
+```
+
+**Three things proved before any device time is spent: the storage gets written, the loader does not
+overwrite the primitive, and the round-trip passes.**
+
+**Two routes to kernel read/write now exist rather than one.** **Plan A is `lapse.lua`, around 25-40%.
+Plan B is `p2jb` plus `ps5-kexp.bin`, around 30-45%.** If one dies, the other is ready. **The
+residual risk on plan B is unchanged by lifting the gate and is dominated by the patch status of the
+IOMMU vulnerability on 14.00.** The gate was never the vulnerability; it was a refusal standing in
+front of the attempt.
+
+**The failure diagnostics are specific, which is what makes the attempt worth running.** With the
+gate lifted, a patched IOMMU vulnerability surfaces as one of the exploit's own native messages:
+`unable to find softc !!`, `unable to init iommu !!`, or `unable to patch qa flags !!`. **The
+original gate hid the attempt behind a preemptive refusal and produced no evidence at all. Lifting it
+turns a silent rejection into a run that reports why it stopped.**
+
 **The final boundary, stated plainly.** It is not offset coverage, which is robust by construction.
 It is not the foothold, which is engine behaviour and does not age with the firmware. **It is a
-single 2023 vulnerability that has to still be live on a firmware Sony has patched four times.**
-**No offline analysis reaches that answer. The first `send lapse.lua` either completes the
-double-free or dies there, and that is the only measurement that settles it.**
+2023 AIO double-free and an IOMMU softc path that have to still be live on a firmware Sony has
+patched four times.** **No offline analysis reaches that answer. The first payload pushed over TCP
+either completes its primitive or dies with a message naming where, and that is the only measurement
+that settles it. The 12.70 line in the track record was a boundary of the code rather than of the
+vulnerability, and lifting it converts a silent refusal into an attempt that reports what it found.**
 
 **Current state.** Two saves are built and verified on disk. **Test 1** carries the foothold and is
 expected to report Lua injection success. **Test 2** carries the complete loader: `inject.iet`
