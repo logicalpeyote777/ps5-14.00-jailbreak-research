@@ -4071,6 +4071,38 @@ of the ipv6 primitive, so the whole read hierarchy stands or falls with the same
 depends on.</strong> <strong>One small imperfection was noted: the <code>if string.byte(result[1]) == 0 then return nil end</code>
 after the <code>while true</code> loop is unreachable, since the loop always returns from inside when it finds the
 null; the leftover is harmless and does not change behavior.</strong></p>
+<p><strong>The write side mirrors the read side exactly.</strong> <strong><code>write_byte</code>, <code>write_word</code>, <code>write_dword</code> and
+<code>write_qword</code> (<code>kernel.lua:60-74</code>) are each a <code>write_buffer</code> call with a fixed width of 1, 2, 4 or 8
+bytes: the value is converted to an 8-byte string with <code>ub8(value)</code> and the first N bytes are written with
+<code>:sub(1,N)</code>, which are the low N bytes in little-endian, the same byte order the read side uses.</strong>
+<strong><code>write_buffer</code> is the base, the copyin of the ipv6 primitive.</strong> <strong>The goal is arbitrary read AND write,
+and the two halves are symmetric: read is the copyout, write is the copyin, and the wrapper hierarchies
+above them are mirror images.</strong></p>
+<table>
+<thead>
+<tr>
+<th>side</th>
+<th>fixed-width primitives</th>
+<th>base</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>read</td>
+<td><code>read_byte</code>/<code>word</code>/<code>dword</code>/<code>qword</code></td>
+<td><code>read_buffer</code> (copyout)</td>
+</tr>
+<tr>
+<td>write</td>
+<td><code>write_byte</code>/<code>word</code>/<code>dword</code>/<code>qword</code></td>
+<td><code>write_buffer</code> (copyin)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>If the ipv6 primitive works, both hierarchies work; if it does not, both fall.</strong> <strong>The symmetry is
+confirmed by the jailbreak's own self-check: <code>uid_after = 0</code> in <code>escalate_curproc</code> is proof that the write
+hierarchy actually patched the <code>ucred</code>, the same way the read hierarchy's <code>inside_kdata</code> read is proof the
+read side works.</strong></p>
 <p><strong>Confidence on 14.00, separated by component rather than given as one number.</strong></p>
 <table>
 <thead>
