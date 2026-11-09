@@ -1968,6 +1968,31 @@ the right shape before spending the carrier.</strong></p>
 goes from 166 to 167 entries under the id <code>CVE-2026-43720-history-addrof</code>, following the pattern
 of the existing custom entries. The <code>post</code> contract is where this is easy to get wrong. The real one,
 read from <code>CVE-2026-43720-leak</code>, is:</p>
+<p><strong>The same numeric-payload flaw that killed the SSV spray was present in this probe too, and it was
+fixed before the run rather than diagnosed after it.</strong> The phase 1 marker was numeric:</p>
+<pre><code class="language-js">var probe = { get trigger() { fired++; return 0x41424344; } };
+</code></pre>
+<p><strong><code>0x41424344</code> is 1 094 861 636, which as a double becomes <code>0x41d05090d1000000</code>.</strong> Looking for
+<code>41424344</code> in the dump is futile: the marker gets float-encoded, so the value found is not the value
+put in. And the phase 5 spray had the same defect, <code>o["k" + i] = { get g() { return i; } }</code>, a getter
+returning a number, so it lands on IEEE-754 bit patterns rather than pointers exactly as the SSV
+spray did.</p>
+<p><strong>The irony is that phase 4 of the same probe checks for the float signature it was about to produce:</strong></p>
+<pre><code class="language-js">f64[0] = 98.8;
+d.float_signature_4058 = (dv.getUint32(4, true) &amp; 0xffff0000) === 0x40580000;
+</code></pre>
+<p><strong>The probe knew about the float problem and tested for it as a comparison term, then sprayed numbers
+in its own experiment.</strong> It checked for the defect elsewhere and committed it inside.</p>
+<p><strong>The fix makes the getters return a shared object across two keys,</strong> so the slot holds a pointer and
+the sharing between <code>a</code> and <code>b</code> is the built-in check: the same value at two slots means pointers,
+since a float repeating identically is possible while a pointer repeating is by construction. Applied
+and live, <code>code_len</code> 5285 to 5969, <code>plan_id</code> 2641 to 2642, syntax re-checked after the edit.</p>
+<p><strong>Why fixing it beforehand mattered: without the fix the probe would have reported <code>spray_landed: 16</code>
+with float values and looked like it proved the history serialises into doubles and cannot produce
+pointers.</strong> In fact the wrong type was sprayed. <strong>A false conclusion, reached with a well-controlled
+comparison and a badly designed experiment. The cost of finding that out afterwards is a wasted
+console session and a wrong result on the record; the cost of finding it beforehand is five minutes
+of reading.</strong></p>
 <pre><code class="language-js">/* FIX: ritorna un thenable no-op. La patch sincrona ha tolto la Promise,
    ma 125 moduli chiamano post(...).then(...). Senza questo, muoiono
    di &quot;undefined is not an object&quot; sulla primissima riga. */
