@@ -1964,6 +1964,51 @@ else, reporting <code>marker_sharing_preserved</code>, <code>marker_sharing_lost
 side. Its own stated limit: reading the slots actually requires the UAF carrier, so this run settles
 the structural precondition on the JS side. <strong>It is not the addrof solved; it is knowing the road has
 the right shape before spending the carrier.</strong></p>
+<p><strong>All four vectors that reported the same "zero pointers" symptom were then read one by one, because
+generalising from the symptom was the main risk.</strong> They turn out to have four different stories:</p>
+<table>
+<thead>
+<tr>
+<th>vector</th>
+<th>payload</th>
+<th>numeric flaw</th>
+<th>what is missing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSV original</td>
+<td><code>{idx: q}</code> numeric</td>
+<td><strong>yes</strong></td>
+<td>the right data type</td>
+</tr>
+<tr>
+<td><code>ssv-object</code></td>
+<td><code>{idx: marker}</code> object</td>
+<td>no</td>
+<td>the UAF read</td>
+</tr>
+<tr>
+<td>iterator confusion</td>
+<td>live 64 KB ArrayBuffer</td>
+<td>no</td>
+<td>a read primitive, different cause</td>
+</tr>
+<tr>
+<td><code>history-addrof</code></td>
+<td><code>return i</code> numeric</td>
+<td><strong>yes</strong></td>
+<td>the right data type</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Two of the four had the numeric flaw and two did not, for different reasons.</strong> A generalisation from
+the symptom would have called them all the same problem, which would have wasted a run on the iterator
+confusion changing a payload that was already right, and would have missed fixing <code>history-addrof</code> if
+the work had stopped at the SSV. <strong>The cost of reading all four was a few dozen lines of code; the cost
+of not reading them was a wrong map of which routes are live.</strong> All four are now in their corrected form
+in the live plan, and what remains on each is device-only: whether the UAF read yields pointers, which
+only the console's browser decides.</p>
 <p><strong>The probe is registered in the harness rather than left as a standalone file.</strong> <code>pg_tests.json</code>
 goes from 166 to 167 entries under the id <code>CVE-2026-43720-history-addrof</code>, following the pattern
 of the existing custom entries. The <code>post</code> contract is where this is easy to get wrong. The real one,
