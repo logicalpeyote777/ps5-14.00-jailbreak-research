@@ -3811,6 +3811,18 @@ to the PSN account, not to the device.</strong> The published flow itself demons
 user to read the PSN account id off the PS5, convert it to hex, and fake-activate a PS4 account
 under that id. <strong>If the signature required a device key, fake activation would not exist.</strong> The
 console's zero-key fallback covers the cross-console case.</p>
+<p><strong>Both primary saves were checked for integrity on the host before being handed to the console, because
+a truncated image imports and then fails in a way that looks like an exploit failure rather than a
+build failure.</strong> <strong><code>test1_gezine</code> is 104 857 600 bytes with sha256 <code>75169f5f…</code>, and
+<code>test2_loader_pad_plain</code> is 104 857 600 bytes with sha256 <code>5a4eb393…</code>, both matching the hashes
+recorded at build time.</strong> <strong>No truncation, no corruption; the images are ready for USB import.</strong></p>
+<p><strong>A <code>--check</code> run from the wrong side reported all five saves as missing, and the cause was the
+container boundary, not the saves.</strong> <strong>The saves live in the host's <code>/tmp</code>; the container has its own
+<code>/tmp</code> that does not hold them, so the script run in the container reads an empty directory and reports
+<code>MANCANTE</code> for every save.</strong> <strong>This is the same class of trap as the probe-server loopback: a check run
+in the container against a path that exists only on the host returns an emptiness that names nothing
+about the real cause.</strong> <strong>The rule is to run <code>prepare_usb_saves.py</code> on the host and to verify a save
+with <code>ls -d /tmp/&lt;dir&gt;</code> over the SSH channel before declaring it lost.</strong></p>
 <p><strong>That conversion is a hand-written hexadecimal in the published flow, and it is a place to lose an
 import silently, so it was made a command and validated against a value already in hand.</strong> The folder
 under <code>PS4/SAVEDATA/</code> must carry the account id as 16 lowercase hex digits. The <code>ACCOUNT_ID</code> in
