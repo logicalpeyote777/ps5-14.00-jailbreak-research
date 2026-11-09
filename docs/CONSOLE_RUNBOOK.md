@@ -41,7 +41,22 @@ minute, and what each output means. Read that before the console comes on.**
 **The primary route is the save path, not the browser.** The save path reaches kernel arbitrary r/w
 through `ipv6_kernel_rw`. The browser path is secondary and currently capped at userland.
 
-## 1. Before anything else: get the account ID and prep the saves
+## 1. Before anything else: try the placeholder import, then get the account ID if needed
+
+**Try the import with the placeholder folder before asking for the account id.** The folder name is the
+*source* account id, a piece of metadata, not necessarily a check against the logged-in user. The PS4
+transfer lists saves from any account on the stick and lets you pick the local account to assign them to,
+and gezine's save has already been imported onto consoles where the gezine account was not present. Both
+point to the PS5 tolerating a folder name that is not the logged-in account's hex16.
+
+```
+# copy PS4/SAVEDATA/ACCOUNT_ID_PLACEHOLDER/ to a USB stick (exFAT or FAT32)
+# PS5: Settings > Saved Data (PS4 Saved Data) > USB Extended Storage > Save Data in USB Storage Device
+# if Raspberry Cube (CUSA16074) appears, import it
+```
+
+**If it imports, the account-id blocker is gone and no rename is needed.** If it does not appear or fails,
+get the account id and rename:
 
 ```
 cd /opt/AGENTS/Ares/engagements/ps5-1400-kernel/kernel-hunt
