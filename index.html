@@ -1848,6 +1848,33 @@ constructed view looks like from the outside.</p>
 type of the interface, not the memory underneath.</strong> This is the most useful negative in the
 note: three independent lines of evidence that the canvas UAF is not a route to the leak, and
 that a different class of bug is required rather than a better offset.</p>
+<p><strong>One addrof vector remains unexercised, and it is <code>history.state</code>.</strong> The probe file does call
+<code>pushState</code> and <code>replaceState</code>, but none of those calls is an addrof attempt: they pass an empty
+string or <code>null</code>, used for a navigation timing trick with <code>history.back()</code> and for restoring the URL
+after the CSP <code>allow-top-navigation</code> test. No object with a getter was ever put through the history's
+structured clone, so the channel has never been exercised. It is worth trying because the history's
+clone has to survive session navigation and therefore goes through its own serialization path rather
+than the one the three tested channels use. If that path serializes into a byte buffer, the layout to
+spray differs, and the landing-on-floats result may not repeat in the same shape.</p>
+<p>A probe for it is written and dry-run against a mock that wraps V8's native <code>structuredClone</code>:</p>
+<pre><code class="language-json">{
+  &quot;getter_fired&quot;: true, &quot;getter_depth&quot;: 1,
+  &quot;clone_readable&quot;: true, &quot;clone_shape&quot;: &quot;[object Object]&quot;,
+  &quot;sharing_preserved&quot;: true,
+  &quot;observed_words&quot;: [
+    &quot;double 98.8 -&gt; lo=0x33333333 hi=0x4058b333&quot;,
+    &quot;firma float 0x4058 presente: true&quot;
+  ]
+}
+</code></pre>
+<p><strong>The getter fires, sharing is preserved, and the float signature <code>0x4058b333</code> reproduces exactly
+what the 64-clone spray produced on the device</strong>, which is the expected consistency since V8 and
+WebKit follow the same structured clone specification. What the mock does not settle is the device
+behaviour: the mock is V8, the console is WebKit inside a Capsicum-sandboxed WebProcess, and the open
+question is the same one the SSV channel left, whether the serialization yields a byte-addressable
+view rather than a copy of values. The run costs one browser session and is not lethal, since
+<code>replaceState</code> does not UAF anything, so unlike the lethal cycles it does not require reopening the
+page.</p>
 <h3 id="126-the-rop-prerequisite-list-collapses-from-four-to-two">12.6 The ROP prerequisite list collapses from four to two</h3>
 <p>Four items are commonly listed as prerequisites for the ROP stage. Two of them are not
 independent problems.</p>
