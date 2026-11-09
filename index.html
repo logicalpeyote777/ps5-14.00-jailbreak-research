@@ -3933,6 +3933,31 @@ insensitive and <code>0x09</code> is the same without encryption. The only warni
 <code>header readonly byte is 0, expected 1</code> on the two packages deliberately made writable, which is the
 tool expecting its own default where we intentionally changed it. What <code>mkpfs verify</code> does not settle
 is whether the console accepts the image on USB import; that question closes only on the device.</p>
+<p><strong>The two saves differ in whether we can see inside them at all, and that changes how each test should
+be read.</strong> Trying to unpack the gezine original fails outright:</p>
+<pre><code>superroot: invalid dirent size -453099134 at offset 0
+superroot missing 'flat_path_table' entry
+superroot missing 'uroot' entry
+</code></pre>
+<p><strong>That is not a tool failure, it is the encryption.</strong> <code>mode 0xD</code>, <code>encrypted = True</code>. The encrypted
+superroot does not parse without the key, and the key comes from the SBL unseal, which is a console
+service with no PC implementation. <strong>So we do not know what is inside the gezine save and cannot know
+offline.</strong> What we know is that gezine ships it working cross-console via the zero-key fallback, and
+whether the listener is there gets observed directly: if 9026 opens, it is.</p>
+<p><strong>Ours unpacks, and it checks out byte for byte.</strong> <code>pad_plain</code> at <code>mode 0x0009</code> yields 29 files and
+103 696 050 bytes, and the loader inside the packed image matches the source exactly:</p>
+<pre><code>-rw-rw-r-- 1 kevin kevin 9161 main.lua
+5793a9fd53175ddf5a2fb00d0f041251  main.lua
+5793a9fd53175ddf5a2fb00d0f041251  /tmp/test2_loader_build/src_pad/main.lua
+</code></pre>
+<p><strong>The save we ship contains exactly the loader that was analysed, with the 9026 listener, confirmed by
+md5 between packed image and source.</strong> The asymmetry is the point: for our save there is byte-level
+confidence; for gezine's there is not, and not because it is worse but because it is encrypted with a
+key only an already jailbroken console can produce.</p>
+<p><strong>Which cuts the hypotheses before the console even turns on.</strong> If Test 2 on <code>pad_plain</code> does not open
+9026, the save is excluded a priori as a content cause: the right <code>main.lua</code> is in there, verified.
+What remains is only whether the console accepts the import, whether the game starts, and whether the
+injection fires.</p>
 <p><strong>One comparison that must not be drawn.</strong> Attempting to compare inode write bits between the two
 saves leads to a false conclusion. The gezine original's inode modes and flags come out at high
 entropy (<code>0xE457</code>, <code>0x2EFC</code>, <code>0x9921DC3E</code>), which is encrypted data read with the wrong key: the
