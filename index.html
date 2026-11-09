@@ -4151,6 +4151,16 @@ future"</em>.</strong> On the offset front it is more robust than the loader's t
 and cannot call the Lua <code>storage</code>, and its driver <code>p2jb.lua</code> sets the read/write helpers in memory
 without ever writing the storage key. So <code>ps5-kexp.bin</code> sits in the Test 2 save dormant: nothing
 in the save data invokes it, and the loader never sees the capability it produces.</strong></p>
+<p><strong>The save was unpacked and the native binaries checked at the byte level, and they are real, not
+stubs.</strong> <strong><code>ps5-elfldr.elf</code> is 397 000 bytes and <code>elfldr.elf</code> is 364 424 bytes, both opening with the
+ELF magic <code>7f 45 4c 46</code>.</strong> <strong><code>ps5-kexp.bin</code> opens with <code>b8 ff ff ff ff</code> (<code>mov eax, 0xffffffff</code>),
+<code>48 85 ff</code> (<code>test rdi, rdi</code>), <code>0f 84 d5 00 00 00</code> (<code>je +0xd5</code>) and <code>55</code> (<code>push rbp</code>): genuine
+x86-64 machine code, not a placeholder.</strong> <strong>The save is therefore a complete jailbreak package, holding
+the loader (Lua), the exploit (Lua) and the real native binaries the full jailbreak needs.</strong> <strong>The only
+things that can still stop the full jailbreak on 14.00 are the device question, whether the kernel read
+and write hold, and whether the <code>qa_flags</code> the kexp patches have been hardened on 14.00.</strong> <strong>That
+<code>qa_flags</code> patch is the natural successor to the <code>DATA_BASE_ALLPROC</code> gate: the gate stops plan A's
+post-exploit, and a hardened <code>qa_flags</code> could stop plan B's jailbreak, each with a named error.</strong></p>
 <p><strong>The declared ceiling of the one payload that does feed the loader is well below the target.</strong> The
 project's own payload README gives PS5 support as <code>umtx</code> up to 7.61 and <code>lapse</code> up to 10.01, with
 <code>p2jb</code> undocumented. <strong>The target 14.00 is four major versions above the declared ceiling of the
