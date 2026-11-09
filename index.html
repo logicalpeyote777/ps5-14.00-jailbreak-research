@@ -2754,6 +2754,24 @@ round was the only one that existed.</strong> <strong>What this closes as a caus
 is not because the plan is serving a different version than the one corrected and verified.</strong> The audit
 is reusable and flags the specific pattern, <code>LIBRARY WITHOUT THENABLE: post().then() breaks</code>, and should
 run after every probe registration, since drift is created by updating one copy and not the other.</p>
+<p><strong>The fixes were then confirmed on the served plan rather than inferred from the browser session.</strong> The
+agent page loads and starts the loop, <code>agent_boot</code>, <code>plan_start</code>, <code>pg_begin</code>, but the <code>pg_end</code> does not
+arrive because the Playwright session resets the page to <code>about:blank</code> mid-test, and from there the
+module's relative <code>/log</code> XHR fails silently inside its own try/catch. <strong>Rewriting <code>/log</code> to an absolute
+URL returns <code>RUN OK</code>, but that only proves the code does not throw; the regex replacement targeted
+<code>.open('POST', '/log'</code> and substituted a hard-coded <code>x0.</code> while the module uses different variable names
+in different scopes, so a <code>RUN OK</code> after a rewrite does not prove the rewrite landed.</strong> The clean check
+is reading the served plan directly:</p>
+<pre><code>plan_id 2644  byteview len 6122
+CORREZIONE 1 thenable presente: True
+CORREZIONE 2 guardia null presente: True
+post ritorna thenable: True
+</code></pre>
+<p><strong>Both fixes are in the code the PS5 will actually receive, read from the HTTP response rather than
+deduced from the library source.</strong> <strong>Verify the actual distribution state, not the intent in the source:
+the library can be correct while the plan serves something else, which already happened at 5491 against
+5761, and the browser can execute without reporting. The one reading that does not lie is the server
+response the device will consume.</strong></p>
 <p><strong>What this excludes beforehand: if the agent fails to start on 14.00, the cause is not the loop
 logic, because the loop has been executed end to end in a real browser.</strong> What remains device-only is
 by definition what Chromium does not reproduce, the Capsicum worker <code>SecurityError</code> and the
