@@ -1219,6 +1219,26 @@ is the FPU mode the PS5's WebKit runs under: WebProcess heap pointers have the f
 with denormals-are-zero set the FPU reads <code>0.0</code>. The pointer is present in memory and
 unreadable through any float64 lane. The workaround is a width change, not a location change:
 read through <code>BigUint64Array</code> or <code>Uint8Array</code>, which never enter the FPU.</p>
+<p><strong>The integer-lane workaround is implemented in the probe, and reading the code shows why it still
+returned zero, and the reason is not DAZ.</strong> The leak probe reads through an integer path on purpose:</p>
+<pre><code class="language-js">// ---- THE POINT: read the aliased memory through an INTEGER path ----
+// DAZ is ON in this WebKit: a heap pointer read as float64 flushes to 0.0.
+// getImageData returns Uint8ClampedArray - raw bytes, no FPU denormal handling.
+var id = inner.getImageData(0, 0, 8, 8);
+gid = Array.prototype.slice.call(id.data, 0, 32);
+</code></pre>
+<p><strong>The integer lane is real: <code>getImageData</code> returns a <code>Uint8ClampedArray</code>, raw bytes with no FPU
+denormal handling.</strong> Yet the recorded result is <code>nonzero_bytes: 0</code> and <code>bigint_read: "0"</code>. <strong>If it were
+DAZ, the float lane would read zero and the integer lane would read the pointer. Instead the integer
+lane also reads zero.</strong> The reason is that <code>getImageData</code> reads the canvas pixel buffer, not the context
+structure where the heap pointer lives. A 1×1 canvas has a tiny, freshly-transparent pixel buffer, and
+reading 8×8 from a 1×1 reads mostly outside it, giving zeros. <strong>The integer lane is the right width and
+the wrong target: the pointer is in the context structure (the vtable pointer, the backing-store
+pointer), and <code>getImageData</code> does not touch that structure.</strong></p>
+<p><strong>This refines the width-change claim rather than reopening it.</strong> DAZ is real and the integer lane answers
+it in principle, but the concrete vehicle the probe uses looks at the wrong buffer. <strong>The open question
+is no longer how to beat DAZ, which the integer lane does, but which call reads the context structure
+through the UAF alias on an integer lane.</strong></p>
 <p>The enabling condition on the write side is equally specific. <code>ISO_MALLOC</code> is <strong>off</strong> in the
 PS5 WebKit build (<code>OptionsPlayStation.cmake</code>), which is why engine-written pointers land in
 storage script can subsequently read; had isolation been on, the bidirectional result of §3
