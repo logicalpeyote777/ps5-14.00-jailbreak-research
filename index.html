@@ -3287,6 +3287,34 @@ writable alias; <code>mmap(..., PROT_RWX, ...)</code> at <code>:119</code> gives
 <code>dlsym(0x2001, "getpid")</code> at <code>:184</code> resolves symbols inside the running process. <strong>The control
 channel is TCP: the loader opens a listening socket and Lua is pushed to it from a workstation, so
 once the loader runs the console is commanded over the network rather than through the console.</strong></p>
+<p><strong>That control channel was checked on both ends, because a length encoding that does not match byte for
+byte is a silent failure: the connection succeeds and the execution is wrong.</strong> The sender at
+<code>send_lua.py:56</code>:</p>
+<pre><code class="language-python">s.sendall(struct.pack(&quot;&lt;Q&quot;, len(code)))   # 8 byte little-endian = lunghezza del codice Lua
+s.sendall(code)
+</code></pre>
+<p>and the receiver at <code>main.lua:188</code>:</p>
+<pre><code class="language-lua">syscall.read(client_fd, tmp, 8)
+local size = memory.read_qword(tmp):tonumber()
+if size &gt; 0 and size &lt; maxsize then
+    while cur_size &gt; 0 do
+        local read_size = syscall.read(client_fd, cur_buf, cur_size):tonumber()
+        cur_buf = cur_buf + read_size
+        cur_size = cur_size - read_size
+    end
+    local lua_code = memory.read_buffer(buf, size)
+    run_lua_code(lua_code)
+</code></pre>
+<p><strong><code>read_qword</code> over 8 bytes is exactly <code>&lt;Q</code>.</strong> Both sides also handle partial transfers independently,
+<code>sendall</code> on the Python side and the explicit <code>cur_size -= read_size</code> loop on the loader side, so a
+split TCP segment breaks neither.</p>
+<p><strong>Two protocol details worth knowing.</strong> <code>size == 0xffffffff</code> is not a four gigabyte file but a
+command-channel marker, carrying signal-handler enable and disable on the same socket. And the guard
+<code>size &gt; 0 and size &lt; maxsize</code> means a malformed length is discarded silently into the else branch:
+<strong>a sender that miscalculates the length produces no visible error, it produces no execution at all.</strong></p>
+<p><strong>With transport and environment both read on both sides, the residual risk on the Artemis route is
+neither of those. It is only whether a 2023 exploit still holds on a firmware patched four times, and
+that decides itself on the device.</strong></p>
 <p><strong>The vector is Raspberry Cube, <code>CUSA16074</code>, on the Artemis visual-novel engine.</strong> The save
 exploit that opens the door is gezine's <code>ArtemisLuaLoader</code>, whose stated capability is <em>"Run
 arbitrary lua script from savedata"</em>; the loader built on top of it is n0llptr's
