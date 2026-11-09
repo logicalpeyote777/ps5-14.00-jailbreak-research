@@ -1875,6 +1875,23 @@ question is the same one the SSV channel left, whether the serialization yields 
 view rather than a copy of values. The run costs one browser session and is not lethal, since
 <code>replaceState</code> does not UAF anything, so unlike the lethal cycles it does not require reopening the
 page.</p>
+<p><strong>The probe is registered in the harness rather than left as a standalone file.</strong> <code>pg_tests.json</code>
+goes from 166 to 167 entries under the id <code>CVE-2026-43720-history-addrof</code>, following the pattern
+of the existing custom entries. The <code>post</code> contract is where this is easy to get wrong. The real one,
+read from <code>CVE-2026-43720-leak</code>, is:</p>
+<pre><code class="language-js">/* FIX: ritorna un thenable no-op. La patch sincrona ha tolto la Promise,
+   ma 125 moduli chiamano post(...).then(...). Senza questo, muoiono
+   di &quot;undefined is not an object&quot; sulla primissima riga. */
+return { then: function (f) { try { if (typeof f === 'function') f(); } catch (e2) {} return this; },
+         catch: function (g) { try { if (typeof g === 'function') g(null); } catch (e3) {} return this; } };
+</code></pre>
+<p><strong>The <code>then</code> must actually call <code>f</code> and return <code>this</code>.</strong> The first version returned a thenable that
+never invoked the callback, so the body never ran: only <code>pg_begin</code> was sent and <code>pg_end</code> never
+arrived. That is the class of failure that reads as "the probe found nothing" when in fact it never
+started. With the contract corrected, the mock run produces the full detail set, <code>getter_fired</code> true,
+<code>clone_readable</code> true, <code>sharing_preserved</code> true, <code>double_98_hi</code> <code>0x4058b333</code>, <code>spray_landed</code> 16,
+<code>outcome</code> <code>done</code>, and the syntax is validated with <code>new Function</code> against the code as stored in the
+harness.</p>
 <h3 id="126-the-rop-prerequisite-list-collapses-from-four-to-two">12.6 The ROP prerequisite list collapses from four to two</h3>
 <p>Four items are commonly listed as prerequisites for the ROP stage. Two of them are not
 independent problems.</p>
