@@ -3116,6 +3116,16 @@ to the PSN account, not to the device.</strong> The published flow itself demons
 user to read the PSN account id off the PS5, convert it to hex, and fake-activate a PS4 account
 under that id. <strong>If the signature required a device key, fake activation would not exist.</strong> The
 console's zero-key fallback covers the cross-console case.</p>
+<p><strong>That conversion is a hand-written hexadecimal in the published flow, and it is a place to lose an
+import silently, so it was made a command and validated against a value already in hand.</strong> The folder
+under <code>PS4/SAVEDATA/</code> must carry the account id as 16 lowercase hex digits. The <code>ACCOUNT_ID</code> in
+gezine's <code>param.sfo</code> gives a known pair to test against: <code>8028911461577375126</code> converts to
+<code>6f6c6c6f7061bd96</code>, matching the 16-hex pattern. The script refuses to touch anything if that
+self-test fails, and refuses a decimal outside 64-bit range. <strong>All five packages were renamed with a
+test id and reverted, verifying the whole cycle and leaving the packages back at the placeholder and
+byte-identical.</strong> What this removes from the device session is the manual transcription of hex onto a
+filesystem that may not be case-sensitive, where a <code>6f</code> typed as <code>6F</code> fails the import and the
+console gives no reason.</p>
 <p><strong>Two risks were carried into this and both were closed offline rather than assumed.</strong></p>
 <p><strong>R1, sealed key versus zero key:</strong> closed by the account-binding finding above plus the console's
 zero-key fallback. <strong>The strongest single piece of evidence is that a working encrypted save is
