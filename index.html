@@ -2020,6 +2020,55 @@ constructed view looks like from the outside.</p>
 type of the interface, not the memory underneath.</strong> This is the most useful negative in the
 note: three independent lines of evidence that the canvas UAF is not a route to the leak, and
 that a different class of bug is required rather than a better offset.</p>
+<p><strong>A regex that hunts for numeric payloads matches <code>idx: i</code> in <code>symbol-confusion-1400</code>, and the
+conclusion "same numeric flaw as the original SSV" would be wrong.</strong> The distinction is in the
+butterfly storage type, and it decides whether the flaw is fixable. The original SSV was
+<code>{ idx: q, ref: q * 8 }</code>: every property numeric. <strong>An object with only numeric properties gets a
+butterfly with <code>Double</code> inline storage: the slot holds the IEEE-754 bit pattern of the double, not a
+pointer.</strong> That is why the spray landed on <code>0x4058…</code> ≈ 98.8, the bit pattern of the sprayed floats.
+<strong><code>symbol-confusion-1400</code> is <code>{ idx: i, a: i * 8, b: "tag" + i }</code>: mixed properties, two numeric and
+one string.</strong> <strong>An object with mixed properties cannot use Double inline storage; it gets Dictionary
+storage with named properties.</strong> <strong>In Dictionary storage the slot holds the real value: the integer for
+<code>idx</code> and <code>a</code>, a pointer to the string for <code>b</code>.</strong></p>
+<table>
+<thead>
+<tr>
+<th>payload</th>
+<th>property types</th>
+<th>butterfly storage</th>
+<th>what the slot holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSV original <code>{idx:q, ref:q*8}</code></td>
+<td>all numeric</td>
+<td><strong>Double inline</strong></td>
+<td>IEEE-754 bit pattern (<code>0x4058…</code>)</td>
+</tr>
+<tr>
+<td><code>symbol-confusion-1400</code> <code>{idx:i, a:i*8, b:"tag"+i}</code></td>
+<td>mixed (num + string)</td>
+<td><strong>Dictionary (named)</strong></td>
+<td>real values: integers for <code>idx</code>/<code>a</code>, pointer for <code>b</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The presence of the string <code>b</code> forces Dictionary storage, where <code>idx</code> holds the integer value, not a
+float bit pattern, and <code>b</code> holds a real pointer to the string.</strong> <strong>So <code>symbol-confusion-1400</code> does not
+have the SSV's fixable flaw: it already has real values in the slot, including a pointer (<code>b</code>).</strong> <strong>Its
+"zero pointers" is not a payload flaw to fix by replacing floats with objects. It is the same
+read-primitive gap as the iterator confusion: the byte-addressable view on the slot is missing even
+though the slot contains a real pointer (<code>b</code>).</strong> <strong>The payload is fine; the read is missing.</strong></p>
+<p><strong>This aligns <code>symbol-confusion-1400</code> with the iterator confusion and with <code>ssv-object</code>: all three have
+payloads with the right shape and real values in the slot, and all three stop at the same missing
+byte-addressable read.</strong> <strong>The original SSV's numeric flaw was a different, unique thing: all-numeric
+properties forcing Double inline storage.</strong> <strong>Once that is corrected, no other numeric payload with that
+flaw remains.</strong> <strong>The lesson on the regex: matching <code>idx: i</code> does not distinguish Double inline storage
+(the flaw) from Dictionary storage (not the flaw).</strong> <strong>The distinction depends on the type of the
+object's OTHER properties, not the matched one.</strong> <strong><code>idx: i</code> alone is not enough to conclude "numeric
+flaw"; you have to see whether the object has a non-numeric property that forces Dictionary storage.</strong>
+<strong><code>symbol-confusion-1400</code> has one (<code>b</code>), so it is not the flaw. The original SSV did not, so it was.</strong></p>
 <p><strong>One addrof vector remains unexercised, and it is <code>history.state</code>.</strong> The probe file does call
 <code>pushState</code> and <code>replaceState</code>, but none of those calls is an addrof attempt: they pass an empty
 string or <code>null</code>, used for a navigation timing trick with <code>history.back()</code> and for restoring the URL
