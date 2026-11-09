@@ -3620,6 +3620,51 @@ where plan A's has <code>max_attempt = 32</code> and exits with a clean error. A
 plan B would spin forever, surfacing only as a runner timeout with no evidence about why. A bound of
 64 attempts now converts that hang into a named failure. All three payload files parse as Lua 5.1 and
 the runner simulation passes 5 of 5 scenarios against the modified files.</p>
+<p><strong>The two routes also differ in how complete a state they hand to the loader, and only one of them
+needs a workaround.</strong> Plan A does not reimplement the primitive; it calls the loader's own, at
+<code>lapse.lua:1592</code>:</p>
+<pre><code class="language-lua">ipv6_kernel_rw.init(kernel.addr.curproc_ofiles, kread8, restricted_kwrite8)
+</code></pre>
+<p>and that <code>init</code> (<code>kernel.lua:86-94</code>) calls both <code>create_pipe_pair()</code> and
+<code>create_overlapped_ipv6_sockets()</code>. <code>create_pipe_pair</code> is where <code>pipemap_buffer</code> and <code>read_mem</code> get
+allocated (<code>:109-110</code>), so the table lapse writes into storage at <code>:2044</code> is complete, and the
+loader's <code>copyout</code> (<code>:172-180</code>), which reads <code>data.pipemap_buffer</code>, finds a buffer the loader itself
+allocated during lapse's run. Plan B never passes through <code>init</code>: it uses its own pipes
+(<code>master_wfd</code>/<code>victim_rfd</code>) with <code>set_victim_pipe</code> and leaves <code>ipv6_kernel_rw.data</code> unpopulated. Left
+at <code>rw_initialized = false</code>, the loader would replace plan B's working primitive with its own broken
+route, since <code>pipemap_buffer</code> would be <code>nil</code>. That is exactly why plan B needs
+<code>kernel.rw_initialized = true</code>, and plan A needs nothing.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Plan A <code>lapse</code></th>
+<th>Plan B <code>p2jb_handoff</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Primitive</td>
+<td>the loader's, via <code>ipv6_kernel_rw.init</code></td>
+<td>own pipes, separate module</td>
+</tr>
+<tr>
+<td><code>ipv6_kernel_rw.data</code> after exploit</td>
+<td><strong>complete</strong>, <code>pipemap_buffer</code> allocated by the loader</td>
+<td><strong>incomplete</strong>, never populated</td>
+</tr>
+<tr>
+<td><code>storage.set("kernel_rw")</code></td>
+<td>yes, and it carries everything</td>
+<td>no, has to be added</td>
+</tr>
+<tr>
+<td><code>rw_initialized = true</code> required</td>
+<td><strong>no</strong></td>
+<td><strong>yes</strong></td>
+</tr>
+</tbody>
+</table>
 <p><strong>Execution order is unchanged, plan A then plan B, with the expectation corrected.</strong> If plan A
 returns the round-trip and nothing more, that is the expected behaviour rather than a failure. If a
 complete jailbreak is wanted on 14.00, the route is plan B.</p>
