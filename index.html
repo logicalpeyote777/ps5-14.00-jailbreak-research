@@ -2069,6 +2069,49 @@ sync XHR with no delay, then one with <code>?delay=4</code>, with the threshold 
 client's elapsed time, the mechanism does not apply, and the probe says so rather than returning an
 ambiguous number. Library goes from 167 to 168 entries and the served plan from <code>plan_id</code> 2639 to
 2640 with three tiers.</p>
+<p><strong>This also collapses part of the ROP prerequisite list, because the write does not touch the thread
+structure at all.</strong> Earlier notes framed the alternative as finding an existing WebKit thread through
+<code>thread_list</code>, which keeps <code>thread_list</code> as a prerequisite. <strong>With the sync XHR the blocked thread is
+not discovered, it is us</strong>: the main thread running the JavaScript is the thread that blocks, so
+there is no thread struct to locate in order to know which thread it is. And the write itself needs no
+stack pivot: the kernel writes the response into a buffer we pointed it at, not into a thread's wait
+slot.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>for the WRITE</th>
+<th>for EXECUTION (ROP)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>worker</td>
+<td><strong>no</strong>, the sync XHR suffices</td>
+<td>yes, or an equivalent thread</td>
+</tr>
+<tr>
+<td><code>thread_list</code></td>
+<td><strong>no</strong>, the thread is not discovered</td>
+<td>yes, to find the stack</td>
+</tr>
+<tr>
+<td><code>worker_wait_return</code></td>
+<td><strong>no</strong>, the kernel writes to the pointed buffer</td>
+<td>yes, as the resume point</td>
+</tr>
+<tr>
+<td><code>pop_rsp</code></td>
+<td><strong>no</strong></td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Four of the five ROP prerequisites are prerequisites of execution, not of writing.</strong> For a
+write-what-where with server-controlled content, the sync XHR bypasses all four. What remains is
+<code>addrof</code>, needed regardless to know where to point, and <code>pop_rsp</code> only if execution is also wanted.
+<strong>That separates two objectives that had been pasted together: "can I write" and "can I execute" are
+different blocks with different weights, and the sync XHR moves the first out from under the second.</strong></p>
 <p><strong>Two limits stated plainly.</strong> It does not resolve the addrof, which is still the bottleneck, since
 the buffer must be located and the target pointer must be known. And the write lands in the
 WebProcess address space, not kernel memory, so it is a userspace write-what-where with
