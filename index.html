@@ -4891,6 +4891,44 @@ from 1 to 0, and the printed comparison shows it; if the write failed, <code>uid
 comparison shows that too.</strong> <strong>The evidence is captured by the payload itself through syscalls rather
 than inferred by whoever is watching, so the jailbreak reports its own success or failure in the same
 output stream that carries the goal's read/write proof.</strong></p>
+<p><strong>The full jailbreak is three patches, not one, and the other two were read in the same module.</strong></p>
+<table>
+<thead>
+<tr>
+<th>patch</th>
+<th>what it writes</th>
+<th>what it unlocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patch_ucred</code></td>
+<td>root uid/gid, <code>cr_sceAuthID</code>, <code>cr_sceCaps[0..1]</code>, <code>cr_sceAttrs</code></td>
+<td>system privileges</td>
+</tr>
+<tr>
+<td><code>patch_dynlib_restriction</code></td>
+<td>libkernel range <code>start=0</code>, <code>end=-1</code> at <code>+0xf0</code>/<code>+0xf8</code></td>
+<td>load code from any address</td>
+</tr>
+<tr>
+<td><code>escape_filesystem_sandbox</code></td>
+<td>real root vnode into <code>fd_rdir</code> (<code>+0x10</code>) and <code>fd_jdir</code> (<code>+0x18</code>)</td>
+<td>whole filesystem</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>patch_dynlib_restriction</code> (<code>:1115</code>) reads the dynamic-library object at <code>proc + 0x3e8</code> and sets the
+libkernel address range to <code>0</code> through <code>-1</code>, which is the entire address space, so every address passes
+the range check that normally confines library loading to the libkernel window.</strong> <strong>The bypass is
+credited to @cheburek3000 in the source comment, and the same full-range treatment is applied to the
+eboot segment range read through <code>dynlib_eboot + 0x40</code>.</strong> <strong><code>escape_filesystem_sandbox</code> (<code>:1141</code>) reads
+<code>p_fd</code> at <code>proc + 0x48</code> and overwrites both <code>fd_rdir</code> and <code>fd_jdir</code> with the real root vnode from
+<code>get_root_vnode()</code>, replacing the sandboxed root the process was confined to.</strong></p>
+<p><strong>All three patches write through the kernel read/write, and every offset is relative to the process's own
+structures (<code>proc + 0x3e8</code>, <code>proc + 0x48</code>) or a hardcoded constant.</strong> <strong>None of them asks the firmware
+table for anything, so the complete jailbreak, privileges plus code-loading freedom plus filesystem
+freedom, is reachable on 14.00 for the same structural reason plan B never meets the gate.</strong></p>
 <p>Plan B's single table field is overwritten at runtime before use:</p>
 <pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
 kernel.addr.allproc = find_allproc()          -- runtime, no table
