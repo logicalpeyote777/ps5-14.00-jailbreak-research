@@ -3808,6 +3808,14 @@ consults a firmware table for the base, so the base discovery is robust and firm
 narrows the qa_flags risk to a single question rather than two: the base is found correctly at runtime on any
 firmware, and only the hardcoded offsets inside it can be wrong. The device-specific unknown is whether the
 qa_flags layout is unchanged, not whether the base can be located.</strong></p>
+<p><strong>The qa_flags patch sits after the goal, not before it, and this bounds the damage a changed layout can do.</strong>
+<strong>The goal is the kernel read/write, and that is the <code>ipv6_kernel_rw</code> primitive, established by <code>make_kernel_arw</code>
+(plan A) or the <code>storage.set("kernel_rw")</code> handoff (plan B) before the kexp ever runs.</strong> <strong>The qa_flags patch
+uses that primitive to write the magic value; it cannot run without the primitive already live, so the primitive
+is a precondition of the patch, not its result.</strong> <strong>The verification test checks the primitive with a canary
+round trip and does not check the qa_flags at all, so <code>TEST2 PASS</code> is proof of the read/write, not of the
+jailbreak.</strong> <strong>A changed qa_flags layout would stop the full jailbreak while leaving the goal reached: the
+read/write stands on the out-of-band socket option, not on the qa_flags.</strong></p>
 <p><strong>That control channel was checked on both ends, because a length encoding that does not match byte for
 byte is a silent failure: the connection succeeds and the execution is wrong.</strong> The sender at
 <code>send_lua.py:56</code>:</p>
