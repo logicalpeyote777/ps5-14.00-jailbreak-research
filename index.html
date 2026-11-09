@@ -3510,6 +3510,96 @@ exactly two differences, the header <code>readonly</code> byte cleared and the p
 to land on 3200 blocks.</strong> No loader file was touched, which makes the pair a clean A/B: if the
 primary runs and the writable variant does not, the flag is the only remaining variable, and the
 converse holds too.</p>
+<p><strong>Inspecting the 96-byte SBL key block opened a second question, and a fourth variant closes it.</strong>
+The block is magic <code>pfsSKKey</code>, then <code>0x0a</code> for keyset 10, then 80 bytes of key material; it is the
+sealed input the console's <code>/dev/pfsmgr</code> ioctl <code>0xc0845302</code> turns into a 32-byte EKPFS key. The data
+key of an image is derived from that key together with the image's seed:</p>
+<pre><code class="language-python"># pfs.py:248 pfs_gen_enc_keys
+base_key = hmac_sha256(resolve_ekpfs_key(ekpfs), seed) if new_crypt else resolve_ekpfs_key(ekpfs)
+enc_key  = pfs_gen_crypto_key(base_key, seed, 1)
+tweak_key, data_key = enc_key[:16], enc_key[16:32]
+</code></pre>
+<p><strong>Our primary image is encrypted with <code>ekpfs = zeros</code> and <code>seed = zeros</code>, but the SBL block attached to
+it is gezine's and unseals to gezine's key.</strong> If the console derives the data key from the unsealed
+SBL key plus the seed, our image does not open with it. The other reading is that the documented
+zero-key fallback for a save from a different console applies, which is what the current build recipe
+leans on. The two cannot be reconciled offline, because gezine's real key lives in the Titania and needs
+a jailbroken PS5 at or below 13.60, which is not available.</p>
+<p><strong>One clue leans toward the first reading.</strong> The gezine original has <code>mode = 13</code>, so it is encrypted,
+and its inodes do not decrypt under the zero key. If the zero-key fallback were the cross-console
+mechanism, gezine's image would be zero-key encrypted. It is not. So gezine relies on a key the
+importing console can derive, and a zero-key image carrying gezine's SBL block may not open.</p>
+<p><strong>The unencrypted variant takes the question off the table.</strong> Built by omitting <code>--encrypted</code>, it
+reports <code>mode = 9</code>, which is <code>PFS_MODE_SIGNED</code> and <code>PFS_MODE_CASE_INSENSITIVE</code> with
+<code>PFS_MODE_ENCRYPTED</code> cleared, at <code>ndblock = 3200</code>, <code>readonly = 0</code>, <code>block_size = 32768</code>. The
+decisive check is that <code>mkpfs tree</code> reads its full tree without being given any <code>--ekpfs-key</code> at all:
+there is no key to derive, so nothing depends on what the SBL block unseals to. Its content is
+byte-identical to the writable variant, with an empty <code>diff -rq</code> and <code>cmp</code> confirming <code>inject.iet</code>,
+<code>main.lua</code>, <code>kernel.lua</code>, <code>kernel_offset.lua</code>, <code>ps5-kexp.bin</code> and <code>sce_sys/param.sfo</code> unchanged. The
+package is at <code>/tmp/test2_loader_pad_plain/PS4/SAVEDATA/ACCOUNT_ID_PLACEHOLDER/</code>, <code>savedata</code>
+104857600 bytes with sha256 <code>5a4eb393a9003fba2f3686a09bfec640e3e0fec2fa82616b1c45d14c1a8c509c</code>.</p>
+<p><strong>The full ladder of save packages, and what each one proves.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>mode</th>
+<th>encrypted</th>
+<th>readonly</th>
+<th>key needed</th>
+<th>status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test1_gezine</code></td>
+<td>13</td>
+<td>yes, real key</td>
+<td>0</td>
+<td>yes, derived from SBL</td>
+<td><strong>proven cross-console by the community</strong></td>
+</tr>
+<tr>
+<td><code>test2_loader_pad</code></td>
+<td>13</td>
+<td>yes, zeros</td>
+<td>1</td>
+<td>zeros</td>
+<td>ours, historical primary</td>
+</tr>
+<tr>
+<td><code>test2_loader_adj</code></td>
+<td>13</td>
+<td>yes, zeros</td>
+<td>1</td>
+<td>zeros</td>
+<td>ours, size fallback</td>
+</tr>
+<tr>
+<td><code>test2_loader_pad_rw</code></td>
+<td>13</td>
+<td>yes, zeros</td>
+<td>0</td>
+<td>zeros</td>
+<td>ours, loader byte-identical to primary</td>
+</tr>
+<tr>
+<td><code>test2_loader_pad_plain</code></td>
+<td><strong>9</strong></td>
+<td><strong>no</strong></td>
+<td>0</td>
+<td><strong>none</strong></td>
+<td>ours, loader byte-identical, no derivation</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Every package carries the same loader byte for byte and they differ only in the header flags the
+console actually checks, so each outcome attributes to a single bit rather than to a hidden content
+difference.</strong> One structural limit follows from this and is worth stating plainly: the gezine original is
+the only save with a proven cross-console record, and it cannot be rebuilt. Because it does not decrypt
+under the zero key, it cannot be unpacked, have our loader added, and be repacked under the same key,
+since that key is unknown. The proven key-and-SBL combination therefore cannot be inherited. The
+closest route is the plain variant, which gives up encryption rather than inheriting the key.</p>
 <p><strong>One comparison that must not be drawn.</strong> Attempting to compare inode write bits between the two
 saves leads to a false conclusion. The gezine original's inode modes and flags come out at high
 entropy (<code>0xE457</code>, <code>0x2EFC</code>, <code>0x9921DC3E</code>), which is encrypted data read with the wrong key: the
