@@ -164,7 +164,10 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#146-two-projects-one-unsolved-half">14.6 Two projects, one unsolved half</a></li>
 </ul>
 </li>
-<li><a href="#15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser [new]</a></li>
+<li><a href="#15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser [new]</a><ul>
+<li><a href="#151-a-second-gate-indexed-by-firmware-table-rather-than-by-version-number">15.1 A second gate, indexed by firmware table rather than by version number</a></li>
+</ul>
+</li>
 <li><a href="#16-conclusion-new">16. Conclusion [new]</a></li>
 <li><a href="#references">References</a></li>
 </ul>
@@ -1228,7 +1231,7 @@ the whole content of this section and the two must not be collapsed into either 
 <pre><code>Path      : kernel-hunt/fw1400/ps5-sys-14.00.pup
 Size      : 1 260 600 832 bytes
 SHA256    : 1eb4b18451e0f064fc23b5bd4c95cae7f6489f9ad1148b5dfb0d66452a108ebc
-Source    : archive.midnightchannel.net — &quot;PS5 Official Retail System Firmware v14.00&quot;, 2026-09-18
+Source    : archive.midnightchannel.net: &quot;PS5 Official Retail System Firmware v14.00&quot;, 2026-09-18
 Magic @0x00: SLB2
 BLS  @0x24 : 0x4B2339D5
 </code></pre>
@@ -1409,7 +1412,7 @@ layer 2 blocked as a dependent of layer 1. <strong>Two layers are solved and two
 <strong>layer 2 does not need its own key discovery, it needs layer 1.</strong></p>
 <p><strong>The payload is no longer read-only, and the two documents date the change.</strong> The technical
 write-up describes its extraction payload in these words:</p>
-<pre><code>All operations are read-only — nothing is written to kernel or CCP state.
+<pre><code>All operations are read-only: nothing is written to kernel or CCP state.
 </code></pre>
 <p>The README records that <em>"V4 has replaced V2"</em> and that <em>"V4 possesses abilities to flash
 southbridge WITHOUT a backup."</em> <strong>The read-only claim is true of the version the write-up
@@ -2897,7 +2900,7 @@ corrupt this memory, and i think he's right. perhaps another bug for AIO
 will come (collapse, anyone?), but for now i think we are currently out of
 luck for ps5 on 14.00 and 14.10
 
-                                    — Jose Coixao (@notnotzecoxao), November 4, 2026
+                                    - Jose Coixao (@notnotzecoxao), November 4, 2026
 </code></pre>
 <p><strong>[upstream]</strong> This is the author's own voice rather than a report of it. <strong>The kernel half is
 unfinished in a specific way: the memory the exploit needs to corrupt is, in the author's words,
@@ -3439,6 +3442,85 @@ foothold is engine behaviour rather than an engine vulnerability, where the save
 rather than on a jailbroken console, and where the open question is narrowed to a single
 primitive's coverage of one firmware.</strong> That is a smaller unknown than the one the browser chain
 ended on.</p>
+<h3 id="151-a-second-gate-indexed-by-firmware-table-rather-than-by-version-number">15.1 A second gate, indexed by firmware table rather than by version number</h3>
+<p>The version comparison at <code>p2jb.lua:1285</code> is not the only refusal in the payload. <code>lapse.lua</code>
+carries a second one, and it does not look at <code>FW_VERSION</code> at all:</p>
+<pre><code class="language-lua">-- lapse.lua:1790-1796
+function post_exploitation_ps5()
+
+    -- if we havent found allproc, assume we havent found every kernel offsets yet for this fw
+    if not kernel_offset.DATA_BASE_ALLPROC then
+        printf(&quot;fw not yet supported for jailbreaking&quot;)
+        return
+    end
+</code></pre>
+<p>This gate tests whether the offset table has an entry for the running firmware. The table shipped in
+the save has none:</p>
+<pre><code>=== 13.xx o 14.xx nella tabella offset? ===
+(vuoto = assenti)
+
+DATA_BASE_ALLPROC: 13 voci (13 gruppi di FW che condividono lo stesso offset)
+</code></pre>
+<p>Coverage runs 1.00 through 12.02. There is no 13.xx and no 14.xx entry anywhere in the file. On
+14.00 <code>kernel_offset.DATA_BASE_ALLPROC</code> is <code>nil</code>, so the gate fires on every run.</p>
+<p><strong>The gate stops the jailbreak. It does not stop the primitive, because of what the <code>return</code> is
+scoped to.</strong> It exits <code>post_exploitation_ps5</code>, not <code>kexploit</code>. The real ordering is:</p>
+<pre><code class="language-lua">-- lapse.lua:2025-2046
+local pktopts_sds = double_free_reqs1(...)   -- :2027  the exploitation itself
+
+make_kernel_arw(pktopts_sds, ...)            -- :2032  arbitrary kernel r/w established HERE
+
+if PLATFORM == &quot;ps5&quot; then
+    post_exploitation_ps5()                  -- :2039  returns early at :1793
+end
+
+storage.set(&quot;kernel_rw&quot;, {                   -- :2043  runs regardless
+    ipv6_kernel_rw_data = ipv6_kernel_rw.data,
+    kernel_addr = kernel.addr
+})
+</code></pre>
+<p>The arbitrary read/write is established at <code>:2032</code>, upstream of the gate, and the state is handed to
+the loader afterwards regardless of where the post-exploitation stopped.</p>
+<p><strong>What the gate costs, and what survives.</strong> Everything below the gate is lost: <code>escalate_curproc()</code>
+(<code>:1946</code>), <code>gpu.setup()</code> (<code>:1951</code>), the <code>security_flags</code>/<code>target_id</code>/<code>qa_flags</code>/<code>utoken_flags</code>
+patches (<code>:1916-1941</code>), and the resolution of <code>allproc</code>, <code>data_base</code>, <code>base</code>, <code>dmap_base</code> and
+<code>kernel_cr3</code> (<code>:1843-1848</code>), each of which is anchored to a <code>DATA_BASE_*</code> table field. What
+survives is set unconditionally in <code>make_kernel_arw</code> at <code>:1527-1530</code>: <code>curproc</code>, <code>curproc_fd</code>,
+<code>curproc_ofiles</code>, and <code>inside_kdata</code>, a leaked kernel-data pointer. Every offset those use is
+static and platform-wide (<code>PROC_PID=0xbc</code>, <code>PROC_FD=0x48</code>, <code>FILEDESC_OFILES=0x8</code>, <code>SO_PCB=0x18</code>,
+<code>INPCB_PKTOPTS=0x120</code>, <code>SIZEOF_OFILES=0x30</code>), assigned outside the version loop at
+<code>kernel_offset.lua:353-378</code>, so none of them depends on a 14.00 table entry. The read is also
+self-validating before the gate is reached: <code>:1518-1523</code> compares the PID read out of kernel memory
+against <code>syscall.getpid()</code>, so a pass there means arbitrary read is already working.</p>
+<p><strong>This invalidates the proof criterion stated above, and the correction matters more than the
+finding does.</strong> That criterion asks for a read proof by walking <code>allproc</code> for <code>p_comm</code> strings and a
+write proof by round-trip against <code>DATA_CAVE</code>. On 14.00 both targets are <code>nil</code>, because they are
+produced only past the gate. A test built on them reports failure with a fully working primitive,
+which is the worst available outcome: a false negative that would be read as the primitive being
+dead. The criterion is therefore restated against what the exploit actually exposes on 14.00. The
+round-trip runs on <code>inside_kdata</code> first, then <code>curproc</code>, with the complete bases used only as
+fallback where the table covers the firmware. The harness reports which fields resolved:</p>
+<pre><code>[addr] disponibili: curproc=0x100000 curproc_fd=0x200000 curproc_ofiles=0x300000 inside_kdata=0x400000
+[addr] non risolti: data_base allproc base dmap_base kernel_cr3
+[canary] 5 indirizzi candidati, provo il round-trip
+  [inside_kdata] read originale = 0x55667788
+  [inside_kdata] readback canary = 0x45464800  -&gt; WRITE provato
+  [inside_kdata] restore verificato = 0x55667788
+round-trip OK (read+write proved) @ inside_kdata
+p_comm walk: skipped (discovery failed: kernel.addr.allproc non risolto)
+
+=== TEST2 PASS (discovery parziale): kernel arbitrary read AND write dimostrato ===
+</code></pre>
+<p><strong>The gate draws a line between two results that were previously conflated.</strong> Kernel arbitrary
+read/write, which is the objective, is reachable on 14.00 if the double-free holds, and touches no
+per-firmware table field at all. A complete jailbreak, meaning privilege escalation, sandbox
+escape, debug menu and DEX target id, is blocked until a 14.00 entry is added to the offset table,
+because every one of those patches hangs off <code>DATA_BASE_SECURITY_FLAGS</code> and its derivatives. A
+positive on 14.00 therefore arrives as <code>TEST2 PASS (discovery parziale)</code> rather than as a full
+jailbreak, and the message <code>fw not yet supported for jailbreaking</code> in the output is not a failure
+of the objective: it has to be read alongside the round-trip. Getting the full jailbreak needs the
+value of <code>DATA_BASE_ALLPROC</code> for 14.00, a structural offset determinable from the decrypted PUP,
+and that decryption remains blocked on the L1 key in Titania.</p>
 <hr />
 <h2 id="16-conclusion-new">16. Conclusion <code>[new]</code></h2>
 <p>Two things were established and one was corrected.</p>
