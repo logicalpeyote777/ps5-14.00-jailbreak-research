@@ -1912,6 +1912,40 @@ tests: 2
   tier=history-addrof       code_len=4818
 </code></pre>
 <p><strong>The probe will actually fire on the next browser session.</strong></p>
+<p><strong>A third layer of the same failure was found and fixed: the landing page was static and never asked
+for the plan at all.</strong> The server mapped the root path with a hard-coded line:</p>
+<pre><code class="language-python">if path in (&quot;/&quot;, &quot;&quot;):
+    path = &quot;/probe.html&quot;
+</code></pre>
+<p><strong><code>probe.html</code> has zero references to <code>plan</code>.</strong> It logs but does not poll. <code>agent.html</code> is the
+self-driving loop that polls <code>/plan</code> and runs tests one after another without the operator
+refreshing between them. <strong>So the console landed on a static page and no server-driven experiment
+could start.</strong> The server's catch-all does prefer <code>agent.html</code>, but the hard-coded mapping is reached
+first and the catch-all never runs for <code>/</code>.</p>
+<p>The real path was traced and verified rather than assumed:</p>
+<pre><code>PS5  --(AdGuard rewrite)--&gt;  manuals.playstation.net:443
+     --nginx vhost, server_name manuals.playstation.net--&gt;  proxy_pass http://127.0.0.1:8000
+     --&gt;  probe_server.py
+</code></pre>
+<p><strong>The DNS rewrite is not on the host at all: <code>getent hosts manuals.playstation.net</code> resolves to
+Akamai, because the host uses a different resolver than the console.</strong> AdGuard performs the rewrite,
+as the vhost comment states: <em>"Rewriting that hostname to this host via AdGuard makes the locked
+browser land on the probe instead."</em> The vhost carries <code>CN = manuals.playstation.net</code>, valid to
+Dec 6 2026, and answers <code>http=200</code>.</p>
+<p>With the mapping corrected to prefer the agent and fall back to the static page, the chain was
+verified from the client side through the real HTTPS proxy:</p>
+<pre><code>http=200 size=5428
+40acf1f2d9e4085cfa076f51c9cf6eec  served page   = agent.html
+fetch(ORIGIN + &quot;/plan?_=&quot; + Date.now()
+plan_id: 2639 poll_ms: 2500 tests: 2
+  tier=byteview-stability len=5761
+  tier=history-addrof len=5285
+</code></pre>
+<p><strong>Three independent layers now stand documented, where "the test is written" did not mean "the test
+runs":</strong> the library is not the queue; an update can be frozen in the queue while the readback still
+looks valid; and the landing page can be a page that never asks for the queue. <strong>None of the three
+raises an error. Each produces a silence that reads as "the test found nothing." Verifying the chain
+from the real client side is the only way to rule out all three.</strong></p>
 <p><strong>The harness reports a spurious error on success, and it reads like a failure.</strong> The capture path
 is verified live: <code>probe_log.jsonl</code>, 6099 lines over 2.1 MB, with <code>plan_done</code> for the completed
 plan and the <code>PlayStation; PlayStation 5/14.00</code> user agent. But the last <code>pg_end</code> from the existing
