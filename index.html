@@ -1901,6 +1901,27 @@ properties gives a built-in check: the same value read at two slots means pointe
 repeating identically is possible while a pointer repeating is by construction.</p>
 <p><strong>The SSV failure had been read as "this vector does not produce pointers." The causal chain is more
 mundane and more repairable: numbers were placed where objects belonged.</strong></p>
+<p><strong>The fix holds, and the precondition for it is verified rather than assumed.</strong> The correction only
+works if the clone keeps the sharing, so it was tested:</p>
+<pre><code>numerico bits idx: ['0000000000000000', '3ff0000000000000', '4000000000000000', '4008000000000000']
+oggetto marker sharing preserved: 4  lost: 0
+idx===ref per clone: [true, true, true, true]
+</code></pre>
+<p><strong>Two separate things come out of that.</strong> The numeric payload's bits are canonical IEEE-754 patterns,
+0 to <code>0000…</code>, 1 to <code>3ff0…</code>, 2 to <code>4000…</code>, 3 to <code>4008…</code>, a direct confirmation that numeric
+properties land in <code>Double</code> storage. And with a shared marker, <code>idx === ref</code> survives the clone on all
+four, so <strong><code>structuredClone</code> preserves internal reference sharing</strong>, which is exactly what the vector
+needs: two properties pointing at one object means two slots holding one address, which is the
+built-in check against a repeated float being mistaken for a pointer.</p>
+<p><strong>The test is V8 and the device is WebKit.</strong> The sharing preservation is required by the structured
+clone specification rather than an implementation quirk, so it is expected to hold there too, but it
+needs confirming on device and the registered probe does that.</p>
+<p><strong>The corrected probe is registered.</strong> <code>CVE-2026-43720-ssv-object-spray</code> runs the numeric baseline and
+the object spray in the same run so the difference is attributable to the payload type and nothing
+else, reporting <code>marker_sharing_preserved</code>, <code>marker_sharing_lost</code> and the bit patterns of both side by
+side. Its own stated limit: reading the slots actually requires the UAF carrier, so this run settles
+the structural precondition on the JS side. <strong>It is not the addrof solved; it is knowing the road has
+the right shape before spending the carrier.</strong></p>
 <p><strong>The probe is registered in the harness rather than left as a standalone file.</strong> <code>pg_tests.json</code>
 goes from 166 to 167 entries under the id <code>CVE-2026-43720-history-addrof</code>, following the pattern
 of the existing custom entries. The <code>post</code> contract is where this is easy to get wrong. The real one,
