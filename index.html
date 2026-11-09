@@ -3600,6 +3600,18 @@ the only save with a proven cross-console record, and it cannot be rebuilt. Beca
 under the zero key, it cannot be unpacked, have our loader added, and be repacked under the same key,
 since that key is unknown. The proven key-and-SBL combination therefore cannot be inherited. The
 closest route is the plain variant, which gives up encryption rather than inheriting the key.</p>
+<p><strong>All three of our loader packages verify clean, including the unencrypted one.</strong> <code>mkpfs verify</code> reports
+<code>Signed: yes</code> and <code>Errors: 0</code> on each:</p>
+<pre><code>test2_loader_pad       Mode 0x000D  Signed: yes  Errors: 0
+test2_loader_pad_rw    Mode 0x000D  Signed: yes  Errors: 0   (readonly warning, intended)
+test2_loader_pad_plain Mode 0x0009  Signed: yes  Errors: 0   (readonly warning, intended)
+</code></pre>
+<p>The tool's own legend confirms the bit layout read from the constants: bit 0 signed, bit 1 64-bit
+inodes, bit 2 encrypted, bit 3 case insensitive, so <code>0x0D</code> is signed plus encrypted plus case
+insensitive and <code>0x09</code> is the same without encryption. The only warnings are the expected
+<code>header readonly byte is 0, expected 1</code> on the two packages deliberately made writable, which is the
+tool expecting its own default where we intentionally changed it. What <code>mkpfs verify</code> does not settle
+is whether the console accepts the image on USB import; that question closes only on the device.</p>
 <p><strong>One comparison that must not be drawn.</strong> Attempting to compare inode write bits between the two
 saves leads to a false conclusion. The gezine original's inode modes and flags come out at high
 entropy (<code>0xE457</code>, <code>0x2EFC</code>, <code>0x9921DC3E</code>), which is encrypted data read with the wrong key: the
