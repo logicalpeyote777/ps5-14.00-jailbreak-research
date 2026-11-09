@@ -536,6 +536,48 @@ the address of the confused object. That address is exactly the leak we do not h
 cannot be exploited with the capability that the bug would provide</strong>: it is closed by the same
 missing piece that closes every other route in §12.3, arriving from a direction we did not
 expect.</p>
+<p><strong>Two "zero pointers" results with different causes, and the difference matters because the fix for
+one does not apply to the other.</strong> The SSV spray and the iterator confusion both report objects
+retained with no pointers extracted, which invites generalising the SSV diagnosis across both.
+<strong>It would be wrong.</strong> The iterator probe's variant 2 is <code>object-with-heapref</code>, holding a live
+<code>new ArrayBuffer(65536)</code> in the yielded value:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>SSV spray</th>
+<th>iterator confusion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>probe type</td>
+<td>reads values out of the butterfly</td>
+<td>tests whether the confusion is reached</td>
+</tr>
+<tr>
+<td>payload</td>
+<td><strong>numeric</strong> (<code>idx: q</code>)</td>
+<td><strong>object with a live heap reference</strong></td>
+</tr>
+<tr>
+<td>cause of zero pointers</td>
+<td><code>Double</code> storage, bit pattern instead of pointer</td>
+<td><strong>no read primitive at all</strong></td>
+</tr>
+<tr>
+<td>fixed by changing payload</td>
+<td><strong>yes, verified</strong></td>
+<td><strong>no, the payload is already correct</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The probe says so in its own comment: a TypeError is the PASS for reachability, and "whether it is
+exploitable is a separate question; we only report reachability, never infer exploitability from a
+throw."</strong> Applying the SSV correction here would have meant changing a payload that was already right,
+burning a run and confirming a prejudice. <strong>The lesson is the method: before applying a diagnosis to a
+second case, read whether the second case has the same structure. The temptation to generalise is
+strongest exactly where the symptom is identical.</strong></p>
 <p><strong>No CVE is claimed for this bug, by decision.</strong> The impact is not demonstrated and is not being
 presented as though it were.</p>
 <p><strong>Treating a reachability signal as a primitive is exactly the error class §13.8 is about</strong>, and
