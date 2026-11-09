@@ -4882,6 +4882,15 @@ printf(&quot;we escaped now? in sandbox: before %d after %d&quot;, in_sandbox_be
 </code></pre>
 <p><strong><code>uid: before N after 0</code> and <code>in sandbox: before 1 after 0</code> is a measured before-and-after, not an
 assumption that the patch took.</strong></p>
+<p><strong>The self-check is also the bridge between the goal and the jailbreak.</strong> <strong>The goal is kernel read/write
+demonstrated; <code>escalate_curproc</code> is the jailbreak beyond it, and the before-and-after is the proof that
+the kernel write actually changed the process's privileges.</strong> <strong><code>uid_before</code> and <code>in_sandbox_before</code> are
+read with <code>getuid</code> and <code>is_in_sandbox</code> before the patch, and <code>uid_after</code> and <code>in_sandbox_after</code> are read
+the same way after it.</strong> <strong>If the kernel write works, the uid goes from nonzero to 0 and the sandbox flag
+from 1 to 0, and the printed comparison shows it; if the write failed, <code>uid_after</code> stays nonzero and the
+comparison shows that too.</strong> <strong>The evidence is captured by the payload itself through syscalls rather
+than inferred by whoever is watching, so the jailbreak reports its own success or failure in the same
+output stream that carries the goal's read/write proof.</strong></p>
 <p>Plan B's single table field is overwritten at runtime before use:</p>
 <pre><code class="language-lua">-- p2jb_handoff.lua:1240-1251
 kernel.addr.allproc = find_allproc()          -- runtime, no table
