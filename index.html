@@ -3430,6 +3430,57 @@ with <code>ipv6_kernel_rw</code>, <code>kernel_offset.lua</code> with the tables
 in the <code>inject.iet</code>: the original calls <code>inject.lua</code> by relative path and then three demo
 functions; the loader version includes <code>/savedata0/main.lua</code> by absolute path and nothing else,
 handing control to the loader.</strong> <strong>Both are pending on the device.</strong></p>
+<p><strong>A pre-flight read of the decrypted PFS headers found one real divergence between the two saves, and
+it comes from the build tool rather than from us.</strong> The gezine original carries <code>readonly = 0</code>; the
+images built with mkpfs carry <code>readonly = 1</code>. The tool enforces it unconditionally:</p>
+<pre><code class="language-python"># pfs.py:4821-4822
+if header.readonly != 1:
+    raise BuildError(&quot;Post-write validation failed: header readonly byte is not set&quot;)
+</code></pre>
+<p>and again per inode, rejecting any inode with write bits set (<code>:4828-4832</code>). There is no <code>--writable</code>
+flag in <code>mkpfs pack</code>; the read-only checker repeats the expectation when reading, at <code>:5834</code> and
+<code>:6193</code>. The byte sits at header offset <code>0x1A</code> (<code>pfs.py:4919</code>). A save exported from a real console
+is writable; a save built with mkpfs cannot be.</p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>gezine (Test 1)</th>
+<th>nostro (Test 2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>block_size</code> / <code>ndblock</code> / <code>mode</code></td>
+<td>32768 / 3200 / 13</td>
+<td>32768 / 3200 / 13</td>
+</tr>
+<tr>
+<td><code>readonly</code></td>
+<td><strong>0</strong></td>
+<td><strong>1</strong></td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>256529d518c884a93be0c30d2904eb62</code></td>
+<td><code>00000000000000000000000000000000</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why this is not expected to reach the measurement.</strong> The chain never writes to the save. The game
+has to load the save and run the Lua loader; the kernel read/write is exercised against kernel memory,
+not against the PFS. Game writes arrive at save time, which is after the measurement. What is not
+measured is how the PS5 treats an inbound save whose PFS is flagged read-only over USB, which is a
+gap rather than a failure. The fallback ladder is ordered: run it and see, since the flag does not
+touch the measured chain; otherwise the gezine save is already the foothold validator and carries no
+divergence; and only if Test 2 fails to import while Test 1 passes does the read-only flag become the
+prime suspect, at which point the mkpfs validation is patched locally and the image rebuilt.</p>
+<p><strong>The <code>mkpfs tree</code> failure on the gezine original is a tool defect, not a corrupt image.</strong> It raises
+<code>OSError: [Errno 22] Invalid argument</code> on <code>fh.seek(offset)</code> inside <code>verify_signed_image_signatures</code>
+(<code>pfs.py:5141</code> → <code>:371</code> → <code>utils.py:228</code>), which runs after the header and inodes have already been
+read and decrypted. <code>parse_image_header</code> on that same image returns the fields above cleanly, and the
+file's sha256 matches the recorded original, so the image is intact and only the signature walk
+fails, consistent with the other defects already found in that function.</p>
 <p><strong>The proof criterion for the kernel step is explicit, because a weak check here would be worse
 than no check.</strong> <strong>Read is proven by walking the <code>allproc</code> list and printing at least three
 <code>p_comm</code> strings with their addresses.</strong> Those strings exist nowhere in user memory, so reading
