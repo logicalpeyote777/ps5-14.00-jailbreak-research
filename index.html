@@ -3760,6 +3760,39 @@ command-channel marker, carrying signal-handler enable and disable on the same s
 <p><strong>With transport and environment both read on both sides, the residual risk on the Artemis route is
 neither of those. It is only whether a 2023 exploit still holds on a firmware patched four times, and
 that decides itself on the device.</strong></p>
+<p><strong>The chain around that residual risk was checked end to end, because a bug in the automation would lose
+the goal even with the exploit holding and the primitive live, and the loss would be silent: the runner
+logs but does not return the pass.</strong> The exploit and the verification test are two separate TCP
+connections to the loader, so the first thing to confirm was that the exploit's state survives the hop
+to the test. <strong><code>storage</code> is a global in <code>_G</code> (<code>misc.lua:595</code>, <code>storage = {}</code> with no <code>local</code>), and the
+loader requires <code>misc</code> at <code>main.lua:44</code>.</strong> <strong>The per-call environment (<code>{print, printf}</code> with
+<code>__index = _G</code>) reads <code>storage</code> from <code>_G</code> and calls the method on the same <code>_G.storage</code> table for both
+the exploit and the test, so <code>storage.data</code> persists across the two connections.</strong> <strong>The hop holds.</strong></p>
+<p><strong>The second thing to confirm was the serialization of the stored value, which is
+<code>{ipv6_kernel_rw_data = ..., kernel_addr = kernel.addr}</code>, and <code>kernel.addr</code> is full of uint64 kernel
+addresses.</strong> <strong>A serializer that did not handle uint64 would corrupt every address in the round trip and
+the test would read wrong addresses and fail with the primitive alive.</strong> <strong><code>serialize</code> (<code>misc.lua:298</code>)
+has the branch <code>elseif is_uint64(o) then return string.format("uint64(%q)", hex(o))</code>, and <code>deserialize</code>
+rebuilds through <code>setmetatable({uint64 = uint64}, {__index = _G})</code>.</strong> <strong>The uint64 addresses round-trip
+without loss.</strong></p>
+<p><strong>The pass is gated on the real proof, not the bonus.</strong> The test's verdict keys on <code>roundtrip_proved</code>, the
+read-write-restore cycle of a canary, and not on the <code>p_comm</code> walk. <strong>On 14.00 the <code>p_comm</code> walk fails,
+because <code>kernel.addr.allproc</code> is nil past the <code>DATA_BASE_ALLPROC</code> gate, but the canary round trip targets
+the gate survivors <code>curproc</code> and <code>inside_kdata</code>, set in <code>make_kernel_arw</code> with static offsets, and those
+hold.</strong> <strong>The test prints <code>TEST2 PASS (discovery parziale): kernel arbitrary read AND write dimostrato</code>,
+carrying the note that the goal is proved by the canary round trip and not by the walk: the structural
+discovery failed but the ipv6 primitive with its hardcoded offsets held.</strong> <strong>The runner's
+<code>PASS_RE = "TEST2 PASS"</code> matches both the full and the partial form, so the goal is detected correctly in
+the case 14.00 actually produces.</strong></p>
+<p><strong>A false alarm was cleared on the way.</strong> A first grep, filtered too tightly over a file with many prints,
+suggested the test never printed <code>TEST2 PASS</code> and only printed <code>round-trip OK</code>, which would have meant a
+marker mismatch: the runner would log the round trip as proved yet return false, throwing the goal away.
+<strong>A full grep shows the test prints <code>TEST2 PASS</code> at lines 308 and 310.</strong> <strong>No mismatch.</strong> <strong>The lesson:
+a too-narrow grep over a file full of prints can hide the decisive marker and conjure a bug that is not
+there; run the full grep before concluding.</strong></p>
+<p><strong>The consequence is operational: when the console is powered on and the game is started with the save, the
+chain runs by itself and the goal is detected and stopped correctly, with no known bug in the
+exploit-to-storage-to-test-to-pass chain.</strong></p>
 <p><strong>The vector is Raspberry Cube, <code>CUSA16074</code>, on the Artemis visual-novel engine.</strong> The save
 exploit that opens the door is gezine's <code>ArtemisLuaLoader</code>, whose stated capability is <em>"Run
 arbitrary lua script from savedata"</em>; the loader built on top of it is n0llptr's
