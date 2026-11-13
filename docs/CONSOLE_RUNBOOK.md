@@ -43,6 +43,24 @@ through `ipv6_kernel_rw`. The browser path is secondary and currently capped at 
 
 ## 1. Before anything else: try the placeholder import, then get the account ID if needed
 
+**A stick is already prepared.** As of 2026-11-13 the `KONBOOT` stick on `mac17`
+(`192.168.1.17`, reached from ai-srv with the `mac17` ssh alias) was reformatted exFAT with an MBR
+scheme and loaded with the foothold save, both files sha256-verified against the source on ai-srv:
+
+```
+/Volumes/KONBOOT/PS4/SAVEDATA/ACCOUNT_ID_PLACEHOLDER/savedata      104 857 600 B  75169f5f...
+/Volumes/KONBOOT/PS4/SAVEDATA/ACCOUNT_ID_PLACEHOLDER/savedata.bin          96 B  4f954291...
+```
+
+**Two things to know about that stick.** The reformat erased its Kon-Boot bootability (`grldr`,
+`konboot*.img`, `EFI/`, `menu.lst`). And `diskutil list external` shows the TYPE column as
+`Windows_NTFS` after an exFAT format, which is not an error: the MBR type code for exFAT is `0x07`,
+shared with NTFS, so trust `diskutil info` (`File System Personality: ExFAT`) over the TYPE column.
+
+**Any command aimed at mac17 needs the explicit `ssh mac17` wrapper.** A block run without it lands on
+ai-srv and reports `diskutil: command not found` plus a missing `/Volumes/KONBOOT`, which reads like a
+dead stick but is only the wrong host looking at it.
+
 **Try the import with the placeholder folder before asking for the account id.** The folder name is the
 *source* account id, a piece of metadata, not necessarily a check against the logged-in user. The PS4
 transfer lists saves from any account on the stick and lets you pick the local account to assign them to,
