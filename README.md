@@ -146,6 +146,41 @@ every PUP past and future decryptable on a PC. Extraction needs a jailbroken con
 **firmware 13.60 or below**, which is where Byepervisor reaches. **The 14.00 console cannot
 extract the key that unlocks its own firmware.**
 
+**The community is looking for the same thing.** As of 2026-11-13 its research repository carries
+an open call for a 13.60 console with kernel read/write to run a ready extraction payload, for
+exactly the reason named above: the container key sits in the security processor, so the kernel
+and WebKit binaries cannot be extracted on a PC, which blocks offsets, vtables, gadget work and
+any 13.60→14.10 diff. The extraction research states the mechanism directly: CCP access is
+gated at the SMN/IOHC level rather than by page tables, the PSP works as a session-based crypto
+oracle, and **AES keys never touch kernel-accessible RAM, so extraction has to go through the PSP
+rather than around it.**
+
+## Two walls, and a route that does not pass either
+
+**A survey of published paths on 2026-11-13 finds no jailbreak at 14.00 and every public path
+topping out below it:** Relapse at 7.00–13.60 with no mention of 14.00 in its tracker, its Store
+tile frontend at the same range, WAK1360 at 13.60, the p2jb port to a YouTube/V8 host at
+9.00–12.40, Cinebreak's BD-J escape at 9.00–13.52, slopkit at 9.00–12.00, and Prolapse failed
+on both 14.00 and 14.10.
+
+**Wall one is the 14.00 WebKit text segment.** A FontFace use-after-free chain was built on 14.00
+itself and reached RIP control with heap NX proven by measurement, then stopped hard at the next
+stage needing one `ret` gadget address out of the WebKit text, with only one contributor holding
+decrypted 14.00 binaries. **This is the execute-only-text result seen from the opposite side: we
+could not scan the text because it is execute-only, they cannot read it because it is not
+decrypted.**
+
+**Wall two is the container key above.**
+
+**The save route crosses both by not passing through either.** It needs no WebKit `ret` gadget,
+because the loader carries its own ROP provider inside the game process rather than the
+WebProcess. **It needs no decrypted 14.00 kernel, because the read/write primitive uses static
+offsets, byte-signature discovery and a runtime list walk rather than offsets lifted out of a
+decrypted image.** And it needs no container key for the objective, because the objective is the
+out-of-band socket primitive, which does not depend on decrypting anything. **Where Prolapse fell
+to the AIO bug and where the 14.10 effort is stopped by the text base and the container key, the
+save path does not pass.**
+
 ---
 
 ## Contents

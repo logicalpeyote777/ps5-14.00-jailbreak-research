@@ -162,6 +162,7 @@ footer a.logolink img{height:40px}footer a{color:#8fc4e2;border:none}
 <li><a href="#144-novelty-verdict">14.4 Novelty verdict</a></li>
 <li><a href="#145-nobody-has-written-the-1400-answer">14.5 Nobody has written the 14.00 answer</a></li>
 <li><a href="#146-two-projects-one-unsolved-half">14.6 Two projects, one unsolved half</a></li>
+<li><a href="#147-the-two-walls-re-surveyed-on-2026-11-13">14.7 The two walls, re-surveyed on 2026-11-13</a></li>
 </ul>
 </li>
 <li><a href="#15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser [new]</a><ul>
@@ -3724,6 +3725,74 @@ ablate is demonstrated working on an analogous engine: JSC 13.60, hardware-verif
 calibrated executor. <strong>A primitive verified on 13.60 and a gate measured firing on 14.00 are
 two ends of a question with a real answer at the far end</strong>, not a guess that something might
 work.</p>
+<h3 id="147-the-two-walls-re-surveyed-on-2026-11-13">14.7 The two walls, re-surveyed on 2026-11-13</h3>
+<p><strong>A re-run of the survey four days later finds the community hard-blocked on two things, and both
+are walls this note already measured from the other side.</strong> No 14.00 jailbreak has shipped in the
+interval. Every published path still tops out below it:</p>
+<table>
+<thead>
+<tr>
+<th>Published path</th>
+<th>Firmware ceiling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Relapse</td>
+<td>7.00–13.60, no mention of 14.00 in its issue tracker</td>
+</tr>
+<tr>
+<td>WK Store (a Relapse frontend on the Store tile)</td>
+<td>7.00–13.60</td>
+</tr>
+<tr>
+<td>WAK1360-Relapse</td>
+<td>13.60</td>
+</tr>
+<tr>
+<td>P2JB ported to a YouTube/V8 host</td>
+<td>9.00–12.40</td>
+</tr>
+<tr>
+<td>Cinebreak (BD-J sandbox escape)</td>
+<td>9.00–13.52</td>
+</tr>
+<tr>
+<td>slopkit</td>
+<td>9.00–12.00</td>
+</tr>
+<tr>
+<td>Prolapse</td>
+<td>failed on 14.00 and 14.10</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Wall one: the 14.00 WebKit text segment cannot be read.</strong> The community built a FontFace
+use-after-free chain on 14.00 itself and got further than this note's browser path did: an ASLR
+heap leak through a <code>FontFaceSet::load()</code> reclaim, a null-table survival bypass, a second
+teardown window through the static-init epoch, and RIP control with heap NX proven by
+measurement. <strong>The fifth stage then stops hard, needing one <code>ret</code> gadget address out of the
+14.00 WebKit text segment, and only one contributor holds decrypted 14.00 binaries.</strong> This is
+the execute-only-text result of §9 arriving from the opposite direction: we could not scan the
+text because it is execute-only, they cannot read it because it is not decrypted. <strong>Same wall,
+two faces.</strong></p>
+<p><strong>Wall two: the universal PUP key needs a jailbroken console at 13.60 or lower.</strong> The community
+has the extraction payload ready and is looking for someone to run it. <strong>The stated reason is the
+same one this note reached independently: the container key is held by the security processor, so
+the kernel and WebKit binaries cannot be extracted on a PC, which blocks offsets, vtables,
+gadget work and any 13.60→14.10 diff.</strong> The extraction research states the mechanism plainly:
+CCP access is gated at the SMN/IOHC level rather than by page tables, the PSP works as a
+session-based crypto oracle, and <strong>AES keys never touch kernel-accessible RAM, so extraction has
+to go through the PSP rather than around it.</strong> That is the L1 key of §6 seen from the hardware
+side.</p>
+<p><strong>The save path of §15 crosses both walls by not passing through either.</strong> It needs no WebKit <code>ret</code>
+gadget, because the loader carries its own ROP provider inside the game process rather than the
+WebProcess. <strong>It needs no decrypted 14.00 kernel, because the read/write primitive uses static
+offsets, byte-signature discovery and a runtime list walk rather than offsets lifted out of a
+decrypted image.</strong> And it needs no PUP key for the objective, because the objective is the
+out-of-band socket primitive, which does not depend on decrypting anything. <strong>Where Prolapse fell
+to the AIO bug and where the 14.10 effort is stopped by the text base and the container key, the
+save path does not pass.</strong></p>
 <hr />
 <h2 id="15-the-pivot-a-foothold-that-does-not-run-through-the-browser-new">15. The pivot: a foothold that does not run through the browser <code>[new]</code></h2>
 <p><strong>The browser chain is still standing and still does not produce kernel read/write.</strong> Everything
